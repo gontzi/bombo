@@ -1,21 +1,22 @@
-import { useWheelStore } from '../state/store';
+import { useBingoStore } from '../state/store';
 import { IconSoundOff, IconSoundOn } from './icons';
 
+/** Hall sign: brass-framed enamel with the house name. */
 export function Masthead() {
-  const sound = useWheelStore((s) => s.sound);
-  const setSound = useWheelStore((s) => s.setSound);
+  const sound = useBingoStore((s) => s.sound);
+  const setSound = useBingoStore((s) => s.setSound);
 
   return (
     <header className="masthead">
-      <h1 className="masthead__title">
-        Rueda<span className="masthead__dot" aria-hidden>.</span>
-      </h1>
-      <p className="masthead__tagline">Escribe las opciones. Que decida la suerte.</p>
+      <div className="sign">
+        <h1 className="sign__title">Bombo</h1>
+        <p className="sign__tagline">Sala de sorteos · desde hoy</p>
+      </div>
       <button
         type="button"
         className="icon-button masthead__sound"
         aria-pressed={sound}
-        aria-label="Sonido"
+        aria-label="Sonido de la máquina"
         title={sound ? 'Silenciar' : 'Activar sonido'}
         onClick={() => setSound(!sound)}
       >

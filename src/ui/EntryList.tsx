@@ -1,21 +1,19 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { MAX_LABEL_LENGTH, type Entry } from '../domain/entries';
-import { useWheelStore } from '../state/store';
-import { segmentColor } from '../theme/palette';
+import { useBingoStore } from '../state/store';
+import { BallBadge } from './BallBadge';
 import { IconClose } from './icons';
 
 interface RowProps {
   entry: Entry;
-  index: number;
-  total: number;
   disabled: boolean;
   isWinner: boolean;
-  onRemove: (index: number) => void;
+  onRemove: (id: string) => void;
 }
 
-function EntryRow({ entry, index, total, disabled, isWinner, onRemove }: RowProps) {
+function EntryRow({ entry, disabled, isWinner, onRemove }: RowProps) {
   const [draft, setDraft] = useState(entry.label);
-  const updateEntry = useWheelStore((s) => s.updateEntry);
+  const updateEntry = useBingoStore((s) => s.updateEntry);
 
   useEffect(() => setDraft(entry.label), [entry.label]);
 
@@ -38,10 +36,10 @@ function EntryRow({ entry, index, total, disabled, isWinner, onRemove }: RowProp
 
   return (
     <li className={`entry${isWinner ? ' is-winner' : ''}`}>
-      <span className="entry__swatch" style={{ background: segmentColor(index, total).fill }} aria-hidden />
+      <BallBadge ball={entry.ball} />
       <input
         className="entry__input"
-        aria-label={`Opción ${index + 1} de ${total}`}
+        aria-label={`Bola ${entry.ball}`}
         value={draft}
         maxLength={MAX_LABEL_LENGTH}
         disabled={disabled}
@@ -52,9 +50,9 @@ function EntryRow({ entry, index, total, disabled, isWinner, onRemove }: RowProp
       <button
         type="button"
         className="icon-button entry__remove"
-        aria-label={`Eliminar ${entry.label}`}
+        aria-label={`Sacar del bombo la bola ${entry.ball}, ${entry.label}`}
         disabled={disabled}
-        onClick={() => onRemove(index)}
+        onClick={() => onRemove(entry.id)}
       >
         <IconClose />
       </button>
@@ -63,16 +61,15 @@ function EntryRow({ entry, index, total, disabled, isWinner, onRemove }: RowProp
 }
 
 export function EntryList({ disabled }: { disabled: boolean }) {
-  const entries = useWheelStore((s) => s.entries);
-  const winnerId = useWheelStore((s) => s.lastResult?.entryId);
-  const removeEntry = useWheelStore((s) => s.removeEntry);
+  const entries = useBingoStore((s) => s.entries);
+  const winnerId = useBingoStore((s) => s.lastResult?.entryId);
+  const removeEntry = useBingoStore((s) => s.removeEntry);
   const listRef = useRef<HTMLOListElement>(null);
 
   // Keep keyboard focus in the list after a row disappears.
-  const onRemove = (index: number) => {
-    const entry = entries[index];
-    if (!entry) return;
-    removeEntry(entry.id);
+  const onRemove = (id: string) => {
+    const index = entries.findIndex((e) => e.id === id);
+    removeEntry(id);
     requestAnimationFrame(() => {
       const buttons = listRef.current?.querySelectorAll<HTMLButtonElement>('.entry__remove');
       const next = buttons?.[Math.min(index, buttons.length - 1)];
@@ -83,19 +80,17 @@ export function EntryList({ disabled }: { disabled: boolean }) {
   if (entries.length === 0) {
     return (
       <p className="panel__empty">
-        La rueda está vacía. Escribe una opción arriba o pega una lista, una por línea.
+        El bombo está vacío. Escribe una opción arriba o pega una lista, una por línea: cada una será una bola.
       </p>
     );
   }
 
   return (
     <ol className="entry-list" ref={listRef}>
-      {entries.map((entry, index) => (
+      {entries.map((entry) => (
         <EntryRow
           key={entry.id}
           entry={entry}
-          index={index}
-          total={entries.length}
           disabled={disabled}
           isWinner={entry.id === winnerId}
           onRemove={onRemove}

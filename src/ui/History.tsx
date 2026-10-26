@@ -1,4 +1,5 @@
-import { useWheelStore } from '../state/store';
+import { useBingoStore } from '../state/store';
+import { BallBadge } from './BallBadge';
 import { ConfirmButton } from './ConfirmButton';
 
 const timeFormat = new Intl.DateTimeFormat('es', { hour: '2-digit', minute: '2-digit' });
@@ -10,22 +11,21 @@ function formatWhen(at: number): string {
   return today ? timeFormat.format(date) : `${dayFormat.format(date)} · ${timeFormat.format(date)}`;
 }
 
+/** Called balls, newest first. */
 export function History() {
-  const history = useWheelStore((s) => s.history);
-  const clearHistory = useWheelStore((s) => s.clearHistory);
+  const history = useBingoStore((s) => s.history);
+  const clearHistory = useBingoStore((s) => s.clearHistory);
 
   if (history.length === 0) {
-    return <p className="panel__empty">Todavía no hay giros. Los resultados aparecerán aquí.</p>;
+    return <p className="panel__empty">Aún no ha salido ninguna bola. Las cantadas se apuntan aquí.</p>;
   }
 
   return (
     <>
       <ol className="history" reversed>
-        {history.map((result, i) => (
+        {history.map((result) => (
           <li key={result.id} className="history__item">
-            <span className="history__number" aria-hidden>
-              {history.length - i}
-            </span>
+            <BallBadge ball={result.ball} />
             <span className="history__label">{result.label}</span>
             <time className="history__time" dateTime={new Date(result.at).toISOString()}>
               {formatWhen(result.at)}
@@ -35,9 +35,11 @@ export function History() {
       </ol>
       <div className="panel__footer">
         <span className="panel__count">
-          {history.length} {history.length === 1 ? 'giro' : 'giros'}
+          {history.length} {history.length === 1 ? 'bola cantada' : 'bolas cantadas'}
         </span>
-        <ConfirmButton onConfirm={clearHistory}>Borrar historial</ConfirmButton>
+        <ConfirmButton onConfirm={clearHistory} confirmLabel="¿Borrar?">
+          Borrar historial
+        </ConfirmButton>
       </div>
     </>
   );

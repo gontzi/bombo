@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { indexUnderPointer } from '../domain/wheelMath';
-import { SETTLE_MS, useWheelStore } from './store';
+import { useBingoStore } from './store';
 
-const store = () => useWheelStore.getState();
+const store = () => useBingoStore.getState();
 
 beforeEach(() => {
   vi.useFakeTimers();
-  useWheelStore.setState({ spin: null, lastResult: null, history: [], rotation: 0 });
+  useBingoStore.setState({ draw: null, lastResult: null, history: [] });
   store().replaceAll(['A', 'B', 'C', 'D']);
 });
 
@@ -14,25 +13,25 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('spinning', () => {
-  it('records the pre-chosen winner, which is what ends under the pointer', () => {
+describe('drawing', () => {
+  it('records exactly the winner chosen before the animation', () => {
     for (let k = 0; k < 30; k++) {
-      expect(store().startSpin()).toBe(true);
-      const { plan, winner } = store().spin!;
-      vi.advanceTimersByTime(plan.durationMs + SETTLE_MS);
-
-      const { lastResult, rotation, entries } = store();
+      expect(store().startDraw()).toBe(true);
+      const { plan, winner } = store().draw!;
+      vi.advanceTimersByTime(plan.timeline.totalMs);
+      const { lastResult } = store();
       expect(lastResult?.entryId).toBe(winner.id);
-      expect(entries[indexUnderPointer(rotation, entries.length)]!.id).toBe(winner.id);
+      expect(lastResult?.ball).toBe(winner.ball);
+      expect(lastResult?.label).toBe(winner.label);
     }
     expect(store().history).toHaveLength(30);
   });
 
-  it('ignores new spins and edits while one is running', () => {
-    store().startSpin();
-    const first = store().spin;
-    expect(store().startSpin()).toBe(false);
-    expect(store().spin).toBe(first);
+  it('ignores new draws and edits while one is running', () => {
+    store().startDraw();
+    const first = store().draw;
+    expect(store().startDraw()).toBe(false);
+    expect(store().draw).toBe(first);
 
     store().addEntries(['E']);
     store().removeEntry(store().entries[0]!.id);
@@ -42,45 +41,52 @@ describe('spinning', () => {
 
   it('does nothing on an empty list', () => {
     store().clearEntries();
-    expect(store().startSpin()).toBe(false);
-    expect(store().spin).toBeNull();
+    expect(store().startDraw()).toBe(false);
+    expect(store().draw).toBeNull();
   });
 
-  it('works with a single option', () => {
+  it('works with a single ball', () => {
     store().replaceAll(['Solo']);
-    store().startSpin({ reducedMotion: true });
+    store().startDraw({ reducedMotion: true });
     vi.runAllTimers();
     expect(store().lastResult?.label).toBe('Solo');
   });
 });
 
 describe('removing the winner', () => {
-  it('removes exactly the winning entry when labels repeat', () => {
+  it('removes exactly the winning ball when labels repeat', () => {
     store().replaceAll(['Igual', 'Igual', 'Igual']);
-    store().startSpin({ reducedMotion: true });
-    const winnerId = store().spin!.winner.id;
+    store().startDraw({ reducedMotion: true });
+    const winner = store().draw!.winner;
     vi.runAllTimers();
 
     store().removeWinner();
-    const ids = store().entries.map((e) => e.id);
-    expect(ids).toHaveLength(2);
-    expect(ids).not.toContain(winnerId);
-    expect(store().lastResult).toBeNull();
-    // History keeps the record.
-    expect(store().history[0]!.entryId).toBe(winnerId);
+    const remaining = store().entries;
+    expect(remaining).toHaveLength(2);
+    expect(remaining.map((e) => e.id)).not.toContain(winner.id);
+    expect(remaining.map((e) => e.ball)).not.toContain(winner.ball);
+    expect(store().history[0]!.entryId).toBe(winner.id);
   });
 
   it('is never automatic', () => {
-    store().startSpin();
+    store().startDraw();
     vi.runAllTimers();
     expect(store().entries).toHaveLength(4);
   });
 });
 
 describe('entries', () => {
-  it('adds several at once and trims', () => {
+  it('adds several at once with fresh ball numbers', () => {
     expect(store().addEntries(['  x ', '', 'y'])).toBe(2);
-    expect(store().entries.map((e) => e.label)).toEqual(['A', 'B', 'C', 'D', 'x', 'y']);
+    const entries = store().entries;
+    expect(entries.map((e) => e.label)).toEqual(['A', 'B', 'C', 'D', 'x', 'y']);
+    expect(new Set(entries.map((e) => e.ball)).size).toBe(6);
+  });
+
+  it('keeps the ball number when an option is renamed', () => {
+    const { id, ball } = store().entries[1]!;
+    store().updateEntry(id, 'Nuevo nombre');
+    expect(store().entries[1]).toMatchObject({ id, ball, label: 'Nuevo nombre' });
   });
 
   it('ignores blank edits', () => {

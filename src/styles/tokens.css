@@ -1,47 +1,42 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
 
-  --paper: #eee7da;
-  --paper-2: #e6dece;
-  --paper-3: #d9cfbc;
-  --ink: #1e1a16;
-  --ink-2: #5d5348;
-  --ink-3: #8a7f71;
-  --line: #cdc1ac;
-  --accent: #d4462c;
-  --accent-press: #b93a23;
-  --accent-ink: #fff4e2;
-  --edge: #1e1a16;
-  --focus: #1d4fd8;
-  --winner: #e2a93b;
+  /* The hall */
+  --hall: #140c08;
+  --hall-2: #1f140d;
+  --wood: #2a180f;
+  --brass: #c9a04a;
+  --brass-hi: #e8c97c;
+  --brass-lo: #7d5f26;
+  --felt: #1d4634;
+  --glow: #ffcf7a;
+  --cream: #f6e9cb;
 
+  /* The cartón (paper card) */
+  --paper: #f2e7cd;
+  --paper-2: #e9dcbc;
+  --paper-line: rgba(58, 34, 20, 0.16);
+  --ink: #241710;
+  --ink-2: #5d4633;
+  --ink-3: #8c7357;
+  --red: #b3261e;
+  --red-press: #8f1c16;
+
+  --focus: #ffb347;
+  --focus-on-paper: #1d4fd8;
+
+  --font-sign: 'Barlow Condensed', 'Arial Narrow', 'Roboto Condensed', sans-serif;
   --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
   --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 
-  --radius: 10px;
+  --panel: 384px;
+  --gutter: 24px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
   --space-6: 32px;
-  --space-7: 48px;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #191613;
-    --paper-2: #211d19;
-    --paper-3: #2e2822;
-    --ink: #f1e9dc;
-    --ink-2: #b4a998;
-    --ink-3: #847a6d;
-    --line: #3b342d;
-    --accent: #e0553a;
-    --accent-press: #c4472f;
-    --edge: #050403;
-    --focus: #7aa2ff;
-  }
 }

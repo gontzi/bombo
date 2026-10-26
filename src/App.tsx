@@ -1,37 +1,48 @@
 import { Suspense, lazy } from 'react';
 import { useHotkeys } from './hooks/useHotkeys';
-import { useWheelStore } from './state/store';
+import { useSceneStatus } from './state/sceneStatus';
+import { useBingoStore } from './state/store';
 import { Announcer } from './ui/Announcer';
+import { DrawButton } from './ui/DrawButton';
 import { EntryPanel } from './ui/EntryPanel';
 import { Masthead } from './ui/Masthead';
-import { ResultBanner } from './ui/ResultBanner';
+import { ResultPlate } from './ui/ResultPlate';
 import { SceneBoundary } from './ui/SceneBoundary';
-import { SpinButton } from './ui/SpinButton';
 
-const WheelStage = lazy(() => import('./scene/WheelStage'));
+const BingoStage = lazy(() => import('./scene/BingoStage'));
+
+function LoadingVeil() {
+  const ready = useSceneStatus((s) => s.modelsReady);
+  return (
+    <div className={`veil${ready ? ' is-done' : ''}`} aria-hidden>
+      <span className="veil__text">Preparando la sala…</span>
+    </div>
+  );
+}
 
 export function App() {
   useHotkeys();
-  const isEmpty = useWheelStore((s) => s.entries.length === 0);
+  const isEmpty = useBingoStore((s) => s.entries.length === 0);
 
   return (
     <div className="app">
       <main className="stage" id="stage">
-        <Masthead />
         <div className="stage__canvas">
           <SceneBoundary>
-            <Suspense fallback={<div className="stage__loading" aria-hidden />}>
-              <WheelStage />
+            <Suspense fallback={null}>
+              <BingoStage />
             </Suspense>
           </SceneBoundary>
-          {isEmpty && <p className="stage__empty">Añade opciones para llenar la rueda</p>}
+          <LoadingVeil />
         </div>
-        <ResultBanner />
+        <Masthead />
+        {isEmpty && <p className="stage__empty">El bombo está vacío: mete opciones en el cartón</p>}
+        <ResultPlate />
       </main>
       <div className="controls">
-        <SpinButton />
+        <DrawButton />
       </div>
-      <aside className="sidebar" aria-label="Opciones e historial">
+      <aside className="sidebar" aria-label="Opciones y bolas cantadas">
         <EntryPanel />
       </aside>
       <Announcer />

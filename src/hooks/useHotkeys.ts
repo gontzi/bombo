@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
-import { useWheelStore } from '../state/store';
-import { requestSpin } from './useSpin';
+import { useBingoStore } from '../state/store';
+import { requestDraw } from './useDraw';
 
 const INTERACTIVE = 'input, textarea, select, button, a, [contenteditable="true"], [role="tab"]';
 
-/** Space / Enter spin the wheel from anywhere that is not itself a control; Escape closes the result. */
+/** Space / Enter draw a ball from anywhere that is not itself a control; Escape closes the result. */
 export function useHotkeys() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -12,13 +12,13 @@ export function useHotkeys() {
       const target = event.target instanceof Element ? event.target : null;
 
       if (event.key === 'Escape') {
-        if (useWheelStore.getState().lastResult) useWheelStore.getState().dismissResult();
+        if (useBingoStore.getState().lastResult) useBingoStore.getState().dismissResult();
         return;
       }
       if (event.key !== ' ' && event.key !== 'Enter') return;
       if (target?.closest(INTERACTIVE)) return;
       event.preventDefault();
-      if (!event.repeat) requestSpin();
+      if (!event.repeat) requestDraw();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

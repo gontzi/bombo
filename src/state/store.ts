@@ -5,25 +5,25 @@ import {
   cleanLabel,
   createEntries,
   createId,
+  ensureBallNumbers,
   replaceLabels,
   type Entry,
 } from '../domain/entries';
-import type { SpinPlan } from '../domain/planSpin';
-import { decideSpin } from '../domain/selection';
-import { normalizeAngle } from '../domain/wheelMath';
+import { decideDraw, type DrawPlan } from '../domain/draw';
 import { SAMPLE_LABELS } from './sampleEntries';
 
-export interface SpinResult {
+export interface DrawResult {
   readonly id: string;
   readonly entryId: string;
+  readonly ball: number;
   readonly label: string;
   readonly at: number;
 }
 
-export interface ActiveSpin {
-  readonly plan: SpinPlan;
+export interface ActiveDraw {
+  readonly plan: DrawPlan;
   readonly winner: Entry;
-  /** `performance.now()` when the spin started. */
+  /** `performance.now()` when the draw started. */
   readonly startedAt: number;
 }
 
@@ -34,14 +34,14 @@ export interface Notice {
 
 interface PersistedState {
   entries: Entry[];
-  rotation: number;
-  history: SpinResult[];
+  history: DrawResult[];
   sound: boolean;
 }
 
-export interface WheelState extends PersistedState {
-  spin: ActiveSpin | null;
-  lastResult: SpinResult | null;
+export interface BingoState extends PersistedState {
+  draw: ActiveDraw | null;
+  /** Result on show; its ball sits in the tray until the next draw. */
+  lastResult: DrawResult | null;
   notice: Notice | null;
 
   addEntries: (labels: readonly string[]) => number;
@@ -51,8 +51,8 @@ export interface WheelState extends PersistedState {
   resetToSample: () => void;
   clearEntries: () => void;
 
-  startSpin: (options?: { reducedMotion?: boolean }) => boolean;
-  completeSpin: () => void;
+  startDraw: (options?: { reducedMotion?: boolean }) => boolean;
+  completeDraw: () => void;
   dismissResult: () => void;
   removeWinner: () => void;
   clearHistory: () => void;
@@ -60,13 +60,10 @@ export interface WheelState extends PersistedState {
 }
 
 export const HISTORY_LIMIT = 50;
-/** Pause after the wheel stops before the result is announced. */
-export const SETTLE_MS = 180;
 
-let spinTimer: ReturnType<typeof setTimeout> | undefined;
+let drawTimer: ReturnType<typeof setTimeout> | undefined;
 let noticeId = 0;
 const notice = (text: string): Notice => ({ id: ++noticeId, text });
-
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** localStorage that never throws (private mode, blocked storage, tests). */
@@ -94,143 +91,139 @@ const safeStorage: StateStorage = {
   },
 };
 
+const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
+
 function sanitizePersisted(raw: unknown): Partial<PersistedState> {
-  if (!raw || typeof raw !== 'object') return {};
-  const value = raw as Record<string, unknown>;
+  if (!isObject(raw)) return {};
   const out: Partial<PersistedState> = {};
-  if (Array.isArray(value.entries)) {
-    out.entries = value.entries
-      .filter(
-        (e): e is Entry =>
-          !!e && typeof e === 'object' && typeof e.id === 'string' && typeof e.label === 'string',
-      )
-      .map((e) => ({ id: e.id, label: cleanLabel(e.label) }))
+  if (Array.isArray(raw.entries)) {
+    const rows = raw.entries
+      .filter((e): e is { id: string; label: string; ball?: unknown } =>
+        isObject(e) && typeof e.id === 'string' && typeof e.label === 'string')
+      .map((e) => ({ id: e.id, label: cleanLabel(e.label), ball: e.ball }))
       .filter((e) => e.label.length > 0)
       .slice(0, MAX_ENTRIES);
+    out.entries = ensureBallNumbers(rows);
   }
-  if (typeof value.rotation === 'number' && Number.isFinite(value.rotation)) {
-    out.rotation = normalizeAngle(value.rotation);
-  }
-  if (Array.isArray(value.history)) {
-    out.history = value.history
-      .filter(
-        (r): r is SpinResult =>
-          !!r &&
-          typeof r === 'object' &&
-          typeof r.id === 'string' &&
-          typeof r.entryId === 'string' &&
-          typeof r.label === 'string' &&
-          typeof r.at === 'number',
-      )
+  if (Array.isArray(raw.history)) {
+    out.history = raw.history
+      .filter((r): r is DrawResult =>
+        isObject(r) &&
+        typeof r.id === 'string' &&
+        typeof r.entryId === 'string' &&
+        typeof r.label === 'string' &&
+        typeof r.at === 'number' &&
+        typeof r.ball === 'number')
       .slice(0, HISTORY_LIMIT);
   }
-  if (typeof value.sound === 'boolean') out.sound = value.sound;
+  if (typeof raw.sound === 'boolean') out.sound = raw.sound;
   return out;
 }
 
-export const useWheelStore = create<WheelState>()(
+export const useBingoStore = create<BingoState>()(
   persist(
     (set, get) => ({
       entries: createEntries(SAMPLE_LABELS),
-      rotation: 0,
       history: [],
       sound: true,
-      spin: null,
+      draw: null,
       lastResult: null,
       notice: null,
 
       addEntries: (labels) => {
-        const { spin, entries } = get();
-        if (spin) return 0;
+        const { draw, entries } = get();
+        if (draw) return 0;
         const room = MAX_ENTRIES - entries.length;
         const clean = labels.map(cleanLabel).filter(Boolean).slice(0, Math.max(0, room));
         if (clean.length === 0) {
-          if (room <= 0) set({ notice: notice(`Máximo ${MAX_ENTRIES} opciones.`) });
+          if (room <= 0) set({ notice: notice(`El bombo admite como máximo ${MAX_ENTRIES} bolas.`) });
           return 0;
         }
+        const added = createEntries(clean, entries);
         set({
-          entries: [...entries, ...createEntries(clean)],
+          entries: [...entries, ...added],
           notice: notice(
-            clean.length === 1
-              ? `Añadida: ${clean[0]}`
-              : `${plural(clean.length, 'opción añadida', 'opciones añadidas')}`,
+            added.length === 1
+              ? `Bola ${added[0]!.ball}: ${added[0]!.label}`
+              : `${plural(added.length, 'bola añadida', 'bolas añadidas')} al bombo`,
           ),
         });
-        return clean.length;
+        return added.length;
       },
 
       updateEntry: (id, label) => {
         const clean = cleanLabel(label);
-        if (get().spin || !clean) return;
+        if (get().draw || !clean) return;
         set((s) => ({ entries: s.entries.map((e) => (e.id === id ? { ...e, label: clean } : e)) }));
       },
 
       removeEntry: (id) => {
-        const { spin, entries, lastResult } = get();
-        if (spin) return;
+        const { draw, entries, lastResult } = get();
+        if (draw) return;
         const removed = entries.find((e) => e.id === id);
         if (!removed) return;
         set({
           entries: entries.filter((e) => e.id !== id),
           lastResult: lastResult?.entryId === id ? null : lastResult,
-          notice: notice(`Eliminada: ${removed.label}`),
+          notice: notice(`Bola ${removed.ball} retirada: ${removed.label}`),
         });
       },
 
       replaceAll: (labels) => {
-        if (get().spin) return;
+        if (get().draw) return;
         const clean = labels.map(cleanLabel).filter(Boolean).slice(0, MAX_ENTRIES);
-        set((s) => ({
-          entries: replaceLabels(s.entries, clean),
-          notice: notice(`Lista actualizada: ${plural(clean.length, 'opción', 'opciones')}`),
-        }));
+        set((s) => {
+          const entries = replaceLabels(s.entries, clean);
+          const keepResult = s.lastResult && entries.some((e) => e.id === s.lastResult!.entryId);
+          return {
+            entries,
+            lastResult: keepResult ? s.lastResult : null,
+            notice: notice(`Bombo actualizado: ${plural(clean.length, 'bola', 'bolas')}`),
+          };
+        });
       },
 
       resetToSample: () => {
-        if (get().spin) return;
-        set({
-          entries: createEntries(SAMPLE_LABELS),
-          lastResult: null,
-          notice: notice('Lista de ejemplo restablecida'),
-        });
+        if (get().draw) return;
+        set({ entries: createEntries(SAMPLE_LABELS), lastResult: null, notice: notice('Bolas de ejemplo repuestas') });
       },
 
       clearEntries: () => {
-        if (get().spin) return;
-        set({ entries: [], lastResult: null, notice: notice('Lista vaciada') });
+        if (get().draw) return;
+        set({ entries: [], lastResult: null, notice: notice('Bombo vacío') });
       },
 
-      startSpin: ({ reducedMotion = false } = {}) => {
-        const { spin, entries, rotation } = get();
-        if (spin || entries.length === 0) return false;
-        const { plan, winner } = decideSpin(entries, rotation, { reducedMotion });
+      startDraw: ({ reducedMotion = false } = {}) => {
+        const { draw, entries } = get();
+        if (draw || entries.length === 0) return false;
+        const { plan, winner } = decideDraw(entries, { reducedMotion });
         set({
-          spin: { plan, winner, startedAt: performance.now() },
+          draw: { plan, winner, startedAt: performance.now() },
           lastResult: null,
-          notice: notice('Girando…'),
+          notice: notice('Girando el bombo…'),
         });
         // The store owns the timeline, so the result arrives even if no frame is drawn.
-        clearTimeout(spinTimer);
-        spinTimer = setTimeout(() => get().completeSpin(), plan.durationMs + SETTLE_MS);
+        clearTimeout(drawTimer);
+        drawTimer = setTimeout(() => get().completeDraw(), plan.timeline.totalMs);
         return true;
       },
 
-      completeSpin: () => {
-        const { spin, history } = get();
-        if (!spin) return;
-        clearTimeout(spinTimer);
-        const result: SpinResult = {
+      completeDraw: () => {
+        const { draw, history } = get();
+        if (!draw) return;
+        clearTimeout(drawTimer);
+        const result: DrawResult = {
           id: createId(),
-          entryId: spin.winner.id,
-          label: spin.winner.label,
+          entryId: draw.winner.id,
+          ball: draw.winner.ball,
+          label: draw.winner.label,
           at: Date.now(),
         };
         set({
-          spin: null,
-          rotation: normalizeAngle(spin.plan.targetRotation),
+          draw: null,
           lastResult: result,
           history: [result, ...history].slice(0, HISTORY_LIMIT),
-          notice: notice(`Ha salido: ${result.label}`),
+          notice: notice(`Ha salido la bola ${result.ball}: ${result.label}`),
         });
       },
 
@@ -242,23 +235,33 @@ export const useWheelStore = create<WheelState>()(
         set({ lastResult: null });
       },
 
-      clearHistory: () => set({ history: [], notice: notice('Historial borrado') }),
+      clearHistory: () => set({ history: [], notice: notice('Historial de bolas borrado') }),
 
       setSound: (on) => set({ sound: on }),
     }),
     {
-      name: 'rueda:v1',
+      name: 'bombo:v1',
       version: 1,
       storage: createJSONStorage(() => safeStorage),
-      partialize: (s): PersistedState => ({
-        entries: s.entries,
-        rotation: s.rotation,
-        history: s.history,
-        sound: s.sound,
-      }),
+      partialize: (s): PersistedState => ({ entries: s.entries, history: s.history, sound: s.sound }),
       merge: (persisted, current) => ({ ...current, ...sanitizePersisted(persisted) }),
     },
   ),
 );
 
-export const selectIsSpinning = (s: WheelState) => s.spin !== null;
+/** One-time import of the previous wheel's saved list, so nobody loses their options. */
+export function importLegacyWheelList(): void {
+  try {
+    if (localStorage.getItem('bombo:imported')) return;
+    localStorage.setItem('bombo:imported', '1');
+    const legacy = JSON.parse(localStorage.getItem('rueda:v1') ?? 'null') as { state?: unknown } | null;
+    const restored = sanitizePersisted(legacy?.state);
+    if (restored.entries?.length) {
+      useBingoStore.setState({ entries: restored.entries, history: [] });
+    }
+  } catch {
+    /* nothing to import */
+  }
+}
+
+export const selectIsDrawing = (s: BingoState) => s.draw !== null;

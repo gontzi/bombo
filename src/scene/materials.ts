@@ -1,41 +1,24 @@
 import * as THREE from 'three';
-import { SEGMENT_PALETTE } from '../theme/palette';
 
-/** Shared materials: created once, reused by every wheel size. */
+/** Shared materials for procedural parts, matched to the Blender ones. */
 
-export const lacquer = (color: string) =>
-  new THREE.MeshPhysicalMaterial({
-    color,
-    roughness: 0.42,
-    metalness: 0,
-    clearcoat: 0.85,
-    clearcoatRoughness: 0.2,
-  });
-
-export const segmentMaterials = SEGMENT_PALETTE.map((c) => lacquer(c.fill));
-
-export const winnerMaterials = SEGMENT_PALETTE.map((c) => {
-  const m = lacquer(c.fill);
-  m.emissive = new THREE.Color(c.fill);
-  m.emissiveIntensity = 0.35;
-  return m;
+export const brass = new THREE.MeshStandardMaterial({ color: '#c9a04a', metalness: 1, roughness: 0.28 });
+export const brushedSteel = new THREE.MeshStandardMaterial({ color: '#b4b1ab', metalness: 1, roughness: 0.36 });
+export const chrome = new THREE.MeshStandardMaterial({
+  color: '#dadada',
+  metalness: 1,
+  roughness: 0.12,
+  side: THREE.DoubleSide,
 });
-
-export const inkLacquer = new THREE.MeshPhysicalMaterial({
-  color: '#1c1714',
-  roughness: 0.32,
-  clearcoat: 1,
+export const enamel = new THREE.MeshPhysicalMaterial({
+  color: '#4a1410',
+  roughness: 0.3,
+  clearcoat: 0.9,
   clearcoatRoughness: 0.12,
 });
-
-export const brass = new THREE.MeshStandardMaterial({
-  color: '#c9a04a',
-  metalness: 1,
-  roughness: 0.3,
-});
-
-export const darkMetal = new THREE.MeshStandardMaterial({
-  color: '#2b2520',
-  metalness: 0.7,
-  roughness: 0.45,
+export const walnutLacquer = new THREE.MeshPhysicalMaterial({
+  color: '#33190f',
+  roughness: 0.42,
+  clearcoat: 0.7,
+  clearcoatRoughness: 0.18,
 });

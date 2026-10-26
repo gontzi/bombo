@@ -1,32 +1,27 @@
 import { Component, Suspense, useMemo, type ReactNode } from 'react';
 import { useGLTF } from '@react-three/drei';
-import * as THREE from 'three';
+import type * as THREE from 'three';
 
 /**
- * Static GLB assets built in Blender (assets-src/blender/build_assets.py).
- * They share the scene's units and axes, so they mount at identity:
- * wheel-space parts have their origin at the wheel centre on its back plane,
- * the pointer flap at its pivot and the peg at the centre of its base.
+ * Bingo machine parts built in Blender (assets-src/blender/build_bingo.py,
+ * measurements from bingoLayout.json). They share the scene's units and axes:
+ * frame and chute mount at the origin; the crank's origin is on the cage axle.
  */
 const base = import.meta.env.BASE_URL;
 export const MODEL_URLS = {
-  pedestal: `${base}models/rueda-pedestal.glb`,
-  axleHousing: `${base}models/rueda-axle-housing.glb`,
-  hubCap: `${base}models/rueda-hub-cap.glb`,
-  pointer: `${base}models/rueda-pointer.glb`,
-  peg: `${base}models/rueda-peg.glb`,
+  frame: `${base}models/bingo-frame.glb`,
+  chute: `${base}models/bingo-chute.glb`,
+  crank: `${base}models/bingo-crank.glb`,
 } as const;
 
 type ModelKey = keyof typeof MODEL_URLS;
 
 // No Draco or Meshopt in these files, so no decoder is ever fetched.
-const load = (key: ModelKey) => useGLTF(MODEL_URLS[key], false, false);
-
 for (const url of Object.values(MODEL_URLS)) useGLTF.preload(url, false, false);
 
 /** A shadow-casting copy of a model's scene (materials stay shared). */
 function useModelScene(key: ModelKey): THREE.Object3D {
-  const { scene } = load(key);
+  const { scene } = useGLTF(MODEL_URLS[key], false, false);
   return useMemo(() => {
     const copy = scene.clone(true);
     copy.traverse((o) => {
@@ -39,23 +34,9 @@ function useModelScene(key: ModelKey): THREE.Object3D {
   }, [scene]);
 }
 
-export const PedestalModel = () => <primitive object={useModelScene('pedestal')} />;
-export const AxleHousingModel = () => <primitive object={useModelScene('axleHousing')} />;
-export const HubCapModel = () => <primitive object={useModelScene('hubCap')} />;
-export const PointerFlapModel = () => <primitive object={useModelScene('pointer')} />;
-
-/** Geometry and material of the peg, for an InstancedMesh. */
-export function usePegParts(): { geometry: THREE.BufferGeometry; material: THREE.Material } {
-  const { scene } = load('peg');
-  return useMemo(() => {
-    let mesh: THREE.Mesh | undefined;
-    scene.traverse((o) => {
-      if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh;
-    });
-    if (!mesh) throw new Error('rueda-peg.glb has no mesh');
-    return { geometry: mesh.geometry, material: mesh.material as THREE.Material };
-  }, [scene]);
-}
+export const FrameModel = () => <primitive object={useModelScene('frame')} />;
+export const ChuteModel = () => <primitive object={useModelScene('chute')} />;
+export const CrankModel = () => <primitive object={useModelScene('crank')} />;
 
 class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
@@ -65,7 +46,7 @@ class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode
   }
 
   componentDidCatch(error: unknown) {
-    console.warn('Rueda: a 3D model failed to load, using the built-in shape instead.', error);
+    console.warn('Bombo: a 3D model failed to load, using the built-in shape instead.', error);
   }
 
   render() {
@@ -73,10 +54,7 @@ class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode
   }
 }
 
-/**
- * Shows `fallback` while the model loads and if it fails, so the wheel
- * always works and never waits on the network for its core shapes.
- */
+/** Shows `fallback` while the model loads and if it fails, so the machine always works. */
 export function WithFallback({ fallback = null, children }: { fallback?: ReactNode; children: ReactNode }) {
   return (
     <ModelBoundary fallback={fallback}>
