@@ -26,6 +26,22 @@ const BALL_RESTITUTION = 0.45;
 const WALL_FRICTION = 0.32;
 const MAX_SPEED = 3.2;
 const SUBSTEPS = 3;
+/** Approach speeds below this (m/s) are resting contact, not audible hits. */
+const AUDIBLE_SPEED = 0.18;
+const MAX_IMPACTS = 48;
+
+export type ImpactKind = 'ball' | 'wire';
+
+/** A collision worth hearing, collected for the audio layer. */
+export interface Impact {
+  kind: ImpactKind;
+  /** 0–1, from the approach speed. */
+  strength: number;
+  /** World x of the contact, for stereo panning. */
+  x: number;
+}
+
+const strengthFor = (speed: number) => Math.min(1, (speed - AUDIBLE_SPEED) / 1.6);
 
 const tmpN = new THREE.Vector3();
 const tmpW = new THREE.Vector3();
@@ -41,6 +57,29 @@ export class BallSim {
   omega = 0;
   private sleepTimer = 0;
   private grid = new Map<number, BallState[]>();
+  private impacts: Impact[] = [];
+
+  /** Returns and clears the collisions since the last call, loudest first. */
+  drainImpacts(): Impact[] {
+    const out = this.impacts.sort((a, b) => b.strength - a.strength);
+    this.impacts = [];
+    return out;
+  }
+
+  private recordImpact(kind: ImpactKind, speed: number, x: number) {
+    if (speed < AUDIBLE_SPEED) return;
+    const impact = { kind, strength: strengthFor(speed), x };
+    if (this.impacts.length < MAX_IMPACTS) {
+      this.impacts.push(impact);
+      return;
+    }
+    // Full: keep the louder hit.
+    let quietest = 0;
+    for (let i = 1; i < this.impacts.length; i++) {
+      if (this.impacts[i]!.strength < this.impacts[quietest]!.strength) quietest = i;
+    }
+    if (this.impacts[quietest]!.strength < impact.strength) this.impacts[quietest] = impact;
+  }
 
   constructor(
     readonly center: THREE.Vector3,
@@ -155,7 +194,10 @@ export class BallSim {
     ball.position.copy(this.center).addScaledVector(tmpN, limit);
 
     const vn = ball.velocity.dot(tmpN);
-    if (vn > 0) ball.velocity.addScaledVector(tmpN, -(1 + WALL_RESTITUTION) * vn);
+    if (vn > 0) {
+      this.recordImpact('wire', vn, ball.position.x);
+      ball.velocity.addScaledVector(tmpN, -(1 + WALL_RESTITUTION) * vn);
+    }
 
     // Friction against the moving wall: ω × r, with ω along +X.
     tmpW.set(0, -this.omega * (ball.position.z - this.center.z), this.omega * (ball.position.y - this.center.y));
@@ -203,6 +245,7 @@ export class BallSim {
               b.position.addScaledVector(tmpN, push);
               const rel = tmpT.subVectors(b.velocity, a.velocity).dot(tmpN);
               if (rel < 0) {
+                this.recordImpact('ball', -rel, (a.position.x + b.position.x) / 2);
                 const j = (-(1 + BALL_RESTITUTION) * rel) / 2;
                 a.velocity.addScaledVector(tmpN, -j);
                 b.velocity.addScaledVector(tmpN, j);

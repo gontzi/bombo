@@ -71,3 +71,29 @@ describe('ExtractionPath', () => {
     }
   });
 });
+
+describe('impacts', () => {
+  it('reports audible hits while mixing and none once the balls rest', () => {
+    const radius = ballRadiusFor(20);
+    const sim = new BallSim(CAGE_CENTER, CAGE_RADIUS, radius, PORT_INSIDE);
+    sim.sync(ids(20), radius, true);
+    sim.omega = 5;
+    let heard = 0;
+    for (let f = 0; f < 120; f++) {
+      sim.step(1 / 60);
+      const impacts = sim.drainImpacts();
+      heard += impacts.length;
+      for (const i of impacts) {
+        expect(i.strength).toBeGreaterThanOrEqual(0);
+        expect(i.strength).toBeLessThanOrEqual(1);
+      }
+    }
+    expect(heard).toBeGreaterThan(20);
+
+    sim.omega = 0;
+    for (let f = 0; f < 60 * 6; f++) sim.step(1 / 60);
+    sim.drainImpacts();
+    for (let f = 0; f < 30; f++) sim.step(1 / 60);
+    expect(sim.drainImpacts()).toHaveLength(0);
+  });
+});

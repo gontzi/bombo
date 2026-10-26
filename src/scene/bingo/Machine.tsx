@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { playClack, playRoll, setRattle } from '../../audio/sounds';
+import { playClack, playImpacts, playRoll } from '../../audio/sounds';
 import { cageSpeed, extractionPhase, type DrawPlan, type ExtractionPhase } from '../../domain/draw';
 import { MAX_ENTRIES } from '../../domain/entries';
 import { useBingoStore } from '../../state/store';
@@ -74,6 +74,9 @@ export function Machine() {
     invalidate();
   }, [entries, radius, sim, atlas, ballMaterial, invalidate]);
 
+  // Demand rendering: a new draw (or result) must wake the frame loop even when every ball is asleep.
+  useEffect(() => useBingoStore.subscribe(() => invalidate()), [invalidate]);
+
   useEffect(
     () => () => {
       atlas.dispose();
@@ -81,7 +84,6 @@ export function Machine() {
       heroMaterial.dispose();
       sphere.dispose();
       for (const t of heroTextures.current.values()) t.dispose();
-      setRattle(0);
     },
     [atlas, ballMaterial, heroMaterial, sphere],
   );
@@ -186,7 +188,9 @@ export function Machine() {
     sim.radius = r;
     sim.step(dt);
     state.angle += sim.omega * dt;
-    if (sound) setRattle(sim.omega / OMEGA_MAX);
+    // Every audible collision of this frame becomes its own hit; smaller balls ring higher.
+    const impacts = sim.drainImpacts();
+    if (sound) playImpacts(impacts, Math.sqrt(LAYOUT.balls.maxRadius / r), CAGE_CENTER.x);
     if (cageRef.current) cageRef.current.rotation.x = state.angle;
     if (crankRef.current) crankRef.current.rotation.x = state.angle;
 

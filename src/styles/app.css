@@ -527,6 +527,12 @@ kbd {
   text-decoration-color: rgba(246, 233, 203, 0.3);
 }
 
+/* The generic hover uses paper ink, which vanishes on the dark plate. */
+.plate__actions .text-button:hover:not(:disabled) {
+  color: var(--glow);
+  text-decoration-color: currentColor;
+}
+
 .plate__close {
   align-self: start;
 }

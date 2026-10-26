@@ -21,7 +21,8 @@ export function Lighting() {
 
   useEffect(() => {
     scene.add(target);
-    scene.environmentIntensity = 0.55;
+    // Reflections only: enough for brass, chrome and lacquer to read, not enough to light the hall.
+    scene.environmentIntensity = 0.32;
     return () => {
       scene.remove(target);
     };
@@ -29,13 +30,14 @@ export function Lighting() {
 
   return (
     <>
-      <hemisphereLight args={['#ffd6a0', '#2a1208', 0.7]} />
+      <hemisphereLight args={['#ffd6a0', '#2a1208', 0.16]} />
+      {/* A tight pool of light from the pendant: the table and the machine, little beyond. */}
       <spotLight
         position={[0.05, 1.62, 0.32]}
         target={target}
-        angle={0.78}
-        penumbra={0.85}
-        intensity={20}
+        angle={0.5}
+        penumbra={0.55}
+        intensity={42}
         distance={6}
         decay={2}
         color="#ffd09a"

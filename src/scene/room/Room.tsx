@@ -68,7 +68,7 @@ function CallBoard() {
       </mesh>
       <mesh>
         <planeGeometry args={[2.16, 0.81]} />
-        <meshStandardMaterial map={texture} emissiveMap={texture} emissive="#ffffff" emissiveIntensity={0.9} roughness={0.7} />
+        <meshStandardMaterial map={texture} emissiveMap={texture} emissive="#ffffff" emissiveIntensity={0.55} roughness={0.7} />
       </mesh>
     </group>
   );
@@ -104,7 +104,7 @@ function Pendant({ position, light = true }: { position: [number, number, number
         <cylinderGeometry args={[0.004, 0.004, 2.1, 6]} />
         <meshStandardMaterial color="#111" />
       </mesh>
-      {light && <pointLight position-y={-0.05} intensity={2.2} distance={4} decay={2} color="#ffbf73" />}
+      {light && <pointLight position-y={-0.05} intensity={0.9} distance={3.2} decay={2} color="#ffb366" />}
     </group>
   );
 }
@@ -201,7 +201,7 @@ export function Room() {
           </mesh>
           <mesh position-y={0.09}>
             <sphereGeometry args={[0.06, 16, 12]} />
-            <meshStandardMaterial color="#fff2d6" emissive="#ffb866" emissiveIntensity={4} />
+            <meshStandardMaterial color="#fff2d6" emissive="#ffb866" emissiveIntensity={2.2} />
           </mesh>
         </group>
       ))}

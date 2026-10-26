@@ -1,29 +1,135 @@
 /**
- * Machine sounds synthesised with Web Audio (no files): the rattle of balls
- * in the turning cage, the ball rolling down the chute and the clack as it
- * lands in the tray. Nothing plays until unlockAudio() runs from a click.
+ * Machine sounds synthesised with Web Audio (no files). Impacts use modal
+ * synthesis: a hard object rings at a few inharmonic partials that die away
+ * within milliseconds, plus a very short contact transient. Each collision
+ * from the ball simulation triggers its own hit, so what you hear follows
+ * what the balls actually do. Nothing plays until unlockAudio() runs from a click.
  */
 
-let ctx: AudioContext | null = null;
-let noise: AudioBuffer | null = null;
-let rattle: { gain: GainNode; filter: BiquadFilterNode } | null = null;
-let master: GainNode | null = null;
+import type { Impact, ImpactKind } from '../scene/bingo/ballSim';
 
-const VOLUME = 0.5;
+let ctx: AudioContext | null = null;
+let master: GainNode | null = null;
+let noise: AudioBuffer | null = null;
+const banks: Partial<Record<ImpactKind | 'tray', AudioBuffer[]>> = {};
+
+const VOLUME = 0.55;
+/** Simultaneous hits at most, and the minimum spacing between them. */
+const MAX_VOICES = 10;
+const MIN_GAP_MS = 7;
+const VARIANTS = 8;
+
+interface Mode {
+  /** Frequency ratio to the fundamental. */
+  ratio: number;
+  gain: number;
+  /** Decay time constant, seconds. */
+  decay: number;
+}
+
+interface Body {
+  fundamental: [number, number];
+  modes: Mode[];
+  /** Contact transient: duration (s) and level. */
+  click: [number, number];
+  length: number;
+}
+
+/**
+ * Bodies measured by ear against real bingo balls: hard phenolic plastic
+ * gives a bright, very short "tock"; a ball on the brass wire adds a thin
+ * metallic ring; landing in the brass dish rings lower and longer.
+ */
+const BODIES: Record<ImpactKind | 'tray', Body> = {
+  ball: {
+    fundamental: [2300, 3300],
+    modes: [
+      { ratio: 1, gain: 1, decay: 0.016 },
+      { ratio: 1.59, gain: 0.55, decay: 0.009 },
+      { ratio: 2.41, gain: 0.32, decay: 0.006 },
+      { ratio: 3.7, gain: 0.12, decay: 0.004 },
+    ],
+    click: [0.0012, 0.45],
+    length: 0.09,
+  },
+  wire: {
+    fundamental: [3900, 5200],
+    modes: [
+      { ratio: 1, gain: 0.55, decay: 0.05 },
+      { ratio: 2.76, gain: 0.3, decay: 0.03 },
+      { ratio: 5.4, gain: 0.14, decay: 0.016 },
+      // The ball's own body under the ring.
+      { ratio: 0.62, gain: 0.6, decay: 0.01 },
+    ],
+    click: [0.0008, 0.3],
+    length: 0.16,
+  },
+  tray: {
+    fundamental: [1050, 1200],
+    modes: [
+      { ratio: 1, gain: 0.8, decay: 0.2 },
+      { ratio: 1.63, gain: 0.5, decay: 0.13 },
+      { ratio: 2.71, gain: 0.35, decay: 0.08 },
+      { ratio: 3.98, gain: 0.2, decay: 0.05 },
+      { ratio: 2.6, gain: 0.7, decay: 0.012 },
+    ],
+    click: [0.0015, 0.5],
+    length: 0.6,
+  },
+};
+
+function render(c: AudioContext, body: Body, seed: number): AudioBuffer {
+  const rate = c.sampleRate;
+  const n = Math.floor(rate * body.length);
+  const buffer = c.createBuffer(1, n, rate);
+  const data = buffer.getChannelData(0);
+  let s = seed * 9301 + 49297;
+  const rand = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+  const f0 = body.fundamental[0] + (body.fundamental[1] - body.fundamental[0]) * rand();
+  const modes = body.modes.map((m) => ({
+    w: 2 * Math.PI * f0 * m.ratio * (0.97 + rand() * 0.06),
+    gain: m.gain * (0.8 + rand() * 0.4),
+    decay: m.decay * (0.85 + rand() * 0.3),
+    phase: rand() * Math.PI * 2,
+  }));
+  const [clickLen, clickGain] = body.click;
+  let peak = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / rate;
+    let v = 0;
+    for (const m of modes) v += m.gain * Math.exp(-t / m.decay) * Math.sin(m.w * t + m.phase);
+    v += (rand() * 2 - 1) * clickGain * Math.exp(-t / clickLen);
+    // 0.3 ms attack so the onset doesn't click digitally.
+    v *= Math.min(1, t / 0.0003);
+    data[i] = v;
+    peak = Math.max(peak, Math.abs(v));
+  }
+  for (let i = 0; i < n; i++) data[i]! /= peak || 1;
+  return buffer;
+}
 
 function context(): AudioContext | null {
   if (ctx) return ctx;
   const Ctor = window.AudioContext ?? (window as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Ctor) return null;
   ctx = new Ctor();
+  // A gentle compressor keeps bursts of many hits from clipping.
+  const compressor = ctx.createDynamicsCompressor();
+  compressor.threshold.value = -18;
+  compressor.knee.value = 12;
+  compressor.ratio.value = 4;
+  compressor.attack.value = 0.002;
+  compressor.release.value = 0.12;
   master = ctx.createGain();
   master.gain.value = VOLUME;
-  master.connect(ctx.destination);
-  const length = ctx.sampleRate * 2;
+  master.connect(compressor).connect(ctx.destination);
+  for (const kind of Object.keys(BODIES) as Array<keyof typeof BODIES>) {
+    banks[kind] = Array.from({ length: VARIANTS }, (_, i) => render(ctx!, BODIES[kind], i + 1));
+  }
+  const length = ctx.sampleRate;
   noise = ctx.createBuffer(1, length, ctx.sampleRate);
   const data = noise.getChannelData(0);
-  // Sparse clicks rather than white noise: sounds like many small impacts.
-  for (let i = 0; i < length; i++) data[i] = Math.random() < 0.04 ? (Math.random() * 2 - 1) * 0.9 : (Math.random() * 2 - 1) * 0.05;
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
   return ctx;
 }
 
@@ -33,66 +139,68 @@ export function unlockAudio(): void {
   if (c?.state === 'suspended') void c.resume();
 }
 
-const ready = () => !!ctx && ctx.state === 'running' && !!noise && !!master;
+const ready = () => !!ctx && ctx.state === 'running' && !!master;
 
-/** Rattle level follows the cage speed (0 = silent). */
-export function setRattle(level: number): void {
+let voices = 0;
+let lastHit = 0;
+
+function hit(kind: keyof typeof BODIES, gain: number, pan: number, rate: number) {
   if (!ready()) return;
+  const now = performance.now();
+  if (voices >= MAX_VOICES || now - lastHit < MIN_GAP_MS) return;
+  lastHit = now;
   const c = ctx!;
-  if (!rattle && level > 0.01) {
-    const source = c.createBufferSource();
-    source.buffer = noise;
-    source.loop = true;
-    const filter = c.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.Q.value = 0.8;
-    const gain = c.createGain();
-    gain.gain.value = 0;
-    source.connect(filter).connect(gain).connect(master!);
-    source.start();
-    rattle = { gain, filter };
-  }
-  if (rattle) {
-    rattle.gain.gain.setTargetAtTime(Math.min(1, level) * 0.35, c.currentTime, 0.08);
-    rattle.filter.frequency.setTargetAtTime(900 + level * 1800, c.currentTime, 0.1);
+  const bank = banks[kind]!;
+  const source = c.createBufferSource();
+  source.buffer = bank[Math.floor(Math.random() * bank.length)]!;
+  source.playbackRate.value = rate * (0.94 + Math.random() * 0.12);
+  const g = c.createGain();
+  g.gain.value = gain;
+  const panner = c.createStereoPanner();
+  panner.pan.value = Math.max(-1, Math.min(1, pan));
+  source.connect(g).connect(panner).connect(master!);
+  voices++;
+  source.onended = () => {
+    voices--;
+    source.disconnect();
+  };
+  source.start();
+}
+
+/**
+ * Plays the loudest collisions of the last frame. `pitch` > 1 for smaller
+ * balls (long lists), which really do sound higher and lighter.
+ */
+export function playImpacts(impacts: readonly Impact[], pitch: number, centerX: number): void {
+  if (!ready() || impacts.length === 0) return;
+  for (const impact of impacts.slice(0, 4)) {
+    const level = impact.strength ** 1.4;
+    if (level < 0.01) continue;
+    const gain = (impact.kind === 'wire' ? 0.16 : 0.24) * level;
+    hit(impact.kind, gain, (impact.x - centerX) * 2.4, pitch);
   }
 }
 
-function burst(duration: number, frequency: number, q: number, gainValue: number, decay: number) {
-  if (!ready()) return;
+/** Ball rolling down the chrome chute: low, even rumble. */
+export function playRoll(durationSec: number): void {
+  if (!ready() || !noise) return;
   const c = ctx!;
   const source = c.createBufferSource();
   source.buffer = noise;
-  const filter = c.createBiquadFilter();
-  filter.type = 'bandpass';
-  filter.frequency.value = frequency;
-  filter.Q.value = q;
-  const gain = c.createGain();
+  const low = c.createBiquadFilter();
+  low.type = 'lowpass';
+  low.frequency.value = 420;
+  low.Q.value = 0.9;
+  const g = c.createGain();
   const t = c.currentTime;
-  gain.gain.setValueAtTime(gainValue, t);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t + decay);
-  source.connect(filter).connect(gain).connect(master!);
-  source.start(t, Math.random(), duration);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.22, t + durationSec * 0.6);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + durationSec);
+  source.connect(low).connect(g).connect(master!);
+  source.start(t, Math.random() * 0.4, durationSec);
 }
 
-/** Ball rolling down the chute. */
-export function playRoll(durationSec: number): void {
-  burst(durationSec, 520, 0.7, 0.5, durationSec);
-}
-
-/** Hard plastic ball hitting the brass tray. */
+/** Ball landing in the brass tray. */
 export function playClack(strength = 1): void {
-  if (!ready()) return;
-  const c = ctx!;
-  const osc = c.createOscillator();
-  osc.type = 'triangle';
-  osc.frequency.value = 1650;
-  const gain = c.createGain();
-  const t = c.currentTime;
-  gain.gain.setValueAtTime(0.35 * strength, t);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
-  osc.connect(gain).connect(master!);
-  osc.start(t);
-  osc.stop(t + 0.13);
-  burst(0.05, 3200, 1.5, 0.6 * strength, 0.05);
+  hit('tray', 0.42 * strength, 0.35, 1);
 }

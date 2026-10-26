@@ -51,21 +51,21 @@ class ReadyBoundary extends Component<{ children: ReactNode }, { failed: boolean
 export default function BingoStage() {
   return (
     <Canvas
-      shadows
+      // PCFSoftShadowMap was removed from three.js; PCF with a 2k map and soft spot penumbra reads the same.
+      shadows={{ type: THREE.PCFShadowMap }}
       frameloop="demand"
       dpr={[1, 1.75]}
       camera={{ fov: 30, near: 0.05, far: 30, position: [1.2, 1, 1.6] }}
       gl={{ antialias: true }}
       onCreated={({ gl, invalidate }) => {
         gl.toneMapping = THREE.NeutralToneMapping;
-        gl.toneMappingExposure = 1.15;
-        gl.shadowMap.type = THREE.PCFSoftShadowMap;
+        gl.toneMappingExposure = 1.05;
         invalidate();
       }}
       aria-hidden
     >
-      <color attach="background" args={['#140c08']} />
-      <fog attach="fog" args={['#160d09', 2.6, 8.5]} />
+      <color attach="background" args={['#0b0604']} />
+      <fog attach="fog" args={['#0b0604', 2.2, 7]} />
       <RedrawWhenVisible />
       <CameraRig />
       <Lighting />
