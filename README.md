@@ -22,10 +22,9 @@ npm run deploy     # compila y publica en Cloudflare (bombo.gontzi.dev)
 
 ## Despliegue
 
-Cada push a `master` ejecuta `.github/workflows/deploy.yml`: comprobación de tipos, pruebas, compilación y publicación en Cloudflare. Necesita en el repo:
+Cloudflare Workers Builds está conectado a este repo: cada push a `master` lo compila (`npm run build`) y lo publica (`npx wrangler deploy`) en el Worker `bombo`, servido en https://bombo.gontzi.dev. La configuración del Worker vive en `wrangler.jsonc`.
 
-- Variable `CLOUDFLARE_ACCOUNT_ID` (ya configurada).
-- Secreto `CLOUDFLARE_API_TOKEN`: token de Cloudflare creado con la plantilla «Edit Cloudflare Workers». Sin él, el workflow prueba y compila pero no publica.
+`npm run deploy` sigue sirviendo para publicar a mano desde local.
 
 Para regenerar los modelos GLB, con Blender 5.2:
 
