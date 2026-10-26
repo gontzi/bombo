@@ -11,7 +11,7 @@ import type { Impact, ImpactKind } from '../scene/bingo/ballSim';
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 let noise: AudioBuffer | null = null;
-const banks: Partial<Record<ImpactKind | 'tray', AudioBuffer[]>> = {};
+const banks: Partial<Record<ImpactKind | 'tray' | 'button', AudioBuffer[]>> = {};
 
 const VOLUME = 0.55;
 /** Simultaneous hits at most, and the minimum spacing between them. */
@@ -40,7 +40,7 @@ interface Body {
  * gives a bright, very short "tock"; a ball on the brass wire adds a thin
  * metallic ring; landing in the brass dish rings lower and longer.
  */
-const BODIES: Record<ImpactKind | 'tray', Body> = {
+const BODIES: Record<ImpactKind | 'tray' | 'button', Body> = {
   ball: {
     fundamental: [2300, 3300],
     modes: [
@@ -63,6 +63,17 @@ const BODIES: Record<ImpactKind | 'tray', Body> = {
     ],
     click: [0.0008, 0.3],
     length: 0.16,
+  },
+  // Push button: a dull wooden-console "thock" with a short spring click.
+  button: {
+    fundamental: [420, 520],
+    modes: [
+      { ratio: 1, gain: 1, decay: 0.035 },
+      { ratio: 2.3, gain: 0.45, decay: 0.016 },
+      { ratio: 6.1, gain: 0.25, decay: 0.006 },
+    ],
+    click: [0.002, 0.7],
+    length: 0.14,
   },
   tray: {
     fundamental: [1050, 1200],
@@ -203,4 +214,9 @@ export function playRoll(durationSec: number): void {
 /** Ball landing in the brass tray. */
 export function playClack(strength = 1): void {
   hit('tray', 0.42 * strength, 0.35, 1);
+}
+
+/** The push button on the table going down. */
+export function playButton(): void {
+  hit('button', 0.38, -0.35, 1);
 }

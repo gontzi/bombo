@@ -301,112 +301,59 @@ kbd {
   opacity: 0.4;
 }
 
-/* ---------- Draw console: push button on a wooden plate ---------- */
+/* ---------- Draw hint (the button itself is on the table, in 3D) ---------- */
 
 .console {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
 }
 
-.push {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 28px 10px 10px;
-  border: 1px solid rgba(201, 160, 74, 0.45);
+/* Accessible twin of the table button: out of sight until it receives keyboard focus. */
+.draw-a11y {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 10px;
+  padding: 10px 22px;
+  border: 1.5px solid var(--brass);
   border-radius: 999px;
-  background:
-    repeating-linear-gradient(92deg, rgba(0, 0, 0, 0.06) 0 2px, transparent 2px 7px),
-    linear-gradient(180deg, #3a2214, #22130b);
-  box-shadow:
-    0 14px 30px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 220, 160, 0.12);
+  background: var(--red);
   color: var(--cream);
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-.push__bezel {
-  display: grid;
-  place-items: center;
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  background: conic-gradient(from 210deg, var(--brass-lo), var(--brass-hi), var(--brass), var(--brass-lo), var(--brass-hi), var(--brass-lo));
-  box-shadow:
-    inset 0 0 0 2px rgba(0, 0, 0, 0.35),
-    0 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.push__cap {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 38% 30%, #f0675a 0, #c8302a 36%, #8f1c16 100%);
-  box-shadow:
-    0 6px 0 #5e110d,
-    0 8px 10px rgba(0, 0, 0, 0.45);
-  transform: translateY(-5px);
-  transition:
-    transform 90ms var(--ease-out),
-    box-shadow 90ms var(--ease-out),
-    filter 160ms;
-}
-
-.push__label {
   font-family: var(--font-sign);
   font-weight: 800;
-  font-size: 1.7rem;
-  line-height: 1;
+  font-size: 1.3rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--cream);
+  white-space: nowrap;
+  clip-path: inset(50%);
+  opacity: 0;
 }
 
-@media (hover: hover) {
-  .push:hover:not(:disabled) .push__cap {
-    filter: brightness(1.08);
+/* Touch screens have no Space key to mention. */
+@media (hover: none) {
+  .console__key {
+    display: none;
   }
 }
 
-.push:active:not(:disabled) .push__cap,
-.push.is-down .push__cap {
-  transform: translateY(0);
-  box-shadow:
-    0 1px 0 #5e110d,
-    0 2px 3px rgba(0, 0, 0, 0.45);
-}
-
-.push.is-down {
-  cursor: progress;
-}
-
-.push.is-down .push__cap {
-  animation: lamp 900ms ease-in-out infinite alternate;
-}
-
-@keyframes lamp {
-  to {
-    filter: brightness(1.35) saturate(1.1);
-  }
-}
-
-.push:disabled .push__cap {
-  background: radial-gradient(circle at 38% 30%, #8a7a70 0, #5a4c44 60%, #3b302a 100%);
-  box-shadow: 0 6px 0 #241c18;
-}
-
-.push:disabled .push__label {
-  color: rgba(246, 233, 203, 0.5);
+.draw-a11y:focus-visible {
+  clip-path: none;
+  opacity: 1;
 }
 
 .console__hint {
   margin: 0;
-  font-size: 0.82rem;
-  color: rgba(246, 233, 203, 0.7);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(11, 6, 4, 0.7);
+  font-family: var(--font-sign);
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(246, 233, 203, 0.78);
 }
 
 /* ---------- Ball badge (matches the 3D balls) ---------- */
@@ -918,6 +865,7 @@ kbd {
 
   /* Flex items honour z-index even when static: keep the card below the sticky button bar. */
   .sidebar {
+    order: 2;
     position: static;
     z-index: auto;
     width: auto;
@@ -932,35 +880,20 @@ kbd {
     position: static;
   }
 
+  /* Hint sits just under the hall, above the card; the button is tapped on the table. */
   .controls {
-    order: 3;
-    z-index: 10;
-    position: sticky;
-    bottom: 0;
+    order: 1;
+    position: relative;
+    bottom: auto;
     left: auto;
     translate: none;
-    padding: 10px var(--gutter) calc(12px + env(safe-area-inset-bottom));
-    background: linear-gradient(180deg, rgba(20, 12, 8, 0), rgba(20, 12, 8, 0.92) 30%);
+    display: flex;
+    justify-content: center;
+    padding: 10px var(--gutter) 0;
   }
 
   .console__hint {
-    display: none;
-  }
-
-  .push {
-    width: 100%;
-    justify-content: center;
-    padding: 8px 20px 8px 8px;
-  }
-
-  .push__bezel {
-    width: 58px;
-    height: 58px;
-  }
-
-  .push__cap {
-    width: 44px;
-    height: 44px;
+    font-size: 0.85rem;
   }
 
   .entry {

@@ -4,6 +4,7 @@ import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useSceneStatus } from '../state/sceneStatus';
 import { Machine } from './bingo/Machine';
+import { PushButton } from './bingo/PushButton';
 import { CameraRig } from './CameraRig';
 import { Lighting } from './Lighting';
 import { MODEL_URLS } from './models';
@@ -72,6 +73,7 @@ export default function BingoStage() {
       <Room />
       <Table />
       <Machine />
+      <PushButton />
       <ReadyBoundary>
         <Suspense fallback={null}>
           <ModelsReady />
