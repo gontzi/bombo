@@ -17,8 +17,6 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,8 +36,14 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Check for Cloudflare token
+        id: token
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: echo "present=${{ env.TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
       - name: Deploy to Cloudflare
-        if: env.HAS_TOKEN == 'true'
+        if: steps.token.outputs.present == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -47,5 +51,5 @@ jobs:
           command: deploy
 
       - name: Deploy skipped
-        if: env.HAS_TOKEN != 'true'
+        if: steps.token.outputs.present != 'true'
         run: echo "::notice::CLOUDFLARE_API_TOKEN is not set, so this run only tested and built. Add the secret to enable deploys."
