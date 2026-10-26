@@ -1,0 +1,47 @@
+:root {
+  color-scheme: light dark;
+
+  --paper: #eee7da;
+  --paper-2: #e6dece;
+  --paper-3: #d9cfbc;
+  --ink: #1e1a16;
+  --ink-2: #5d5348;
+  --ink-3: #8a7f71;
+  --line: #cdc1ac;
+  --accent: #d4462c;
+  --accent-press: #b93a23;
+  --accent-ink: #fff4e2;
+  --edge: #1e1a16;
+  --focus: #1d4fd8;
+  --winner: #e2a93b;
+
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+
+  --radius: 10px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #191613;
+    --paper-2: #211d19;
+    --paper-3: #2e2822;
+    --ink: #f1e9dc;
+    --ink-2: #b4a998;
+    --ink-3: #847a6d;
+    --line: #3b342d;
+    --accent: #e0553a;
+    --accent-press: #c4472f;
+    --edge: #050403;
+    --focus: #7aa2ff;
+  }
+}

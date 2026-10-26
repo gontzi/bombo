@@ -1,0 +1,34 @@
+import type { SVGProps } from 'react';
+
+const base = {
+  width: 18,
+  height: 18,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.8,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+  focusable: false,
+} as const satisfies SVGProps<SVGSVGElement>;
+
+export const IconClose = () => (
+  <svg {...base}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+
+export const IconSoundOn = () => (
+  <svg {...base}>
+    <path d="M4 10v4h3l5 4V6L7 10H4z" />
+    <path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" />
+  </svg>
+);
+
+export const IconSoundOff = () => (
+  <svg {...base}>
+    <path d="M4 10v4h3l5 4V6L7 10H4z" />
+    <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" />
+  </svg>
+);
