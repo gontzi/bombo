@@ -1,20 +1,41 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useGLTF } from '@react-three/drei';
+import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useBingoStore } from '../../state/store';
 import { ballStyle } from '../../theme/balls';
 import { LAYOUT } from '../bingo/layout';
 import { brass } from '../materials';
+import { MODEL_URLS, WithFallback } from '../models';
 import { Table } from './Table';
 import { carpetTexture, wallpaperTexture, woodTexture } from './textures';
 
 const FLOOR = LAYOUT.floorY;
-const BACK_Z = -2.7;
+/**
+ * The back wall stands close enough, and its signs hang low enough, to be in
+ * shot: the camera looks down at the table, so it only sees the wall up to
+ * about the eye height of someone standing in the hall.
+ */
+const BACK_Z = -2.0;
 const SIDE_X = -3.4;
-const WAINSCOT = 1.05;
+const WAINSCOT = 0.8;
+/** Wall signs: the hall's neon name and the board of balls called, side by side at eye height. */
+const HALL_SIGN: [number, number, number] = [-1.5, 0.42, BACK_Z + 0.03];
+const CALL_BOARD: [number, number, number] = [-0.45, 0.42, BACK_Z + 0.06];
+/** Both signs a little under full size, so they fit side by side even on a narrow screen. */
+const WALL_SIGN_SCALE = 0.82;
+/** How long the board blazes after a new ball is called. */
+const CALL_FLASH_MS = 2200;
+/** Moments the neon flips on or off as it warms up, then it stays lit. */
+const NEON_STUTTER = [180, 260, 520, 600, 640, 1100, 1180];
+const NEON_WARMUP_MS = 1600;
 
-/** "BINGO" board on the back wall, lit with the last balls called. */
+/** "BINGO" board on the back wall, lit with the last balls called; it blazes up when a new one comes in. */
 function CallBoard() {
   const history = useBingoStore((s) => s.history);
+  const invalidate = useThree((s) => s.invalidate);
+  const material = useRef<THREE.MeshStandardMaterial>(null);
+  const calledAt = useRef(0);
   const { canvas, texture } = useMemo(() => {
     const c = document.createElement('canvas');
     c.width = 1024;
@@ -57,19 +78,80 @@ function CallBoard() {
       }
     }
     texture.needsUpdate = true;
+    calledAt.current = performance.now();
+    invalidate();
     // `key` stands in for `last`: repaint when the called numbers change.
-  }, [canvas, texture, key]);
+  }, [canvas, texture, key, invalidate]);
+
+  useFrame(() => {
+    const m = material.current;
+    if (!m) return;
+    const since = performance.now() - calledAt.current;
+    const flash = since < CALL_FLASH_MS ? (1 - since / CALL_FLASH_MS) ** 2 : 0;
+    m.emissiveIntensity = 0.7 + 1.3 * flash;
+    if (flash > 0) invalidate();
+  });
 
   return (
-    <group position={[0.6, 1.62, BACK_Z + 0.06]}>
+    <group position={CALL_BOARD} scale={WALL_SIGN_SCALE}>
       <mesh position-z={-0.03}>
-        <boxGeometry args={[2.3, 0.95, 0.06]} />
+        <boxGeometry args={[1.36, 0.56, 0.06]} />
         <meshStandardMaterial color="#2a160d" roughness={0.5} />
       </mesh>
-      <mesh>
-        <planeGeometry args={[2.16, 0.81]} />
-        <meshStandardMaterial map={texture} emissiveMap={texture} emissive="#ffffff" emissiveIntensity={0.55} roughness={0.7} />
+      <mesh position-z={0.002} material={brass}>
+        <boxGeometry args={[1.3, 0.5, 0.004]} />
       </mesh>
+      <mesh position-z={0.006}>
+        <planeGeometry args={[1.27, 0.476]} />
+        <meshStandardMaterial
+          ref={material}
+          map={texture}
+          emissiveMap={texture}
+          emissive="#ffffff"
+          emissiveIntensity={0.7}
+          roughness={0.7}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+/** The hall's name in neon (assets-src/blender/build_sign.py), flickering on when the room loads. */
+function HallSign() {
+  const { scene } = useGLTF(MODEL_URLS.hallSign, false, false);
+  const invalidate = useThree((s) => s.invalidate);
+  const born = useRef(performance.now());
+  const { sign, neon } = useMemo(() => {
+    const sign = scene.clone(true);
+    let neon: THREE.MeshStandardMaterial | null = null;
+    sign.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      mesh.receiveShadow = true;
+      const source = mesh.material as THREE.MeshStandardMaterial;
+      if (source.name === 'Neon') {
+        neon = source.clone();
+        neon.color.set('#ffc98a');
+        neon.emissive.set('#ff9a2e');
+        mesh.material = neon;
+      }
+    });
+    return { sign, neon: neon as THREE.MeshStandardMaterial | null };
+  }, [scene]);
+
+  useFrame(() => {
+    if (!neon) return;
+    const t = performance.now() - born.current;
+    // A tube warming up: a few stutters, then steady.
+    const on = t > NEON_WARMUP_MS || NEON_STUTTER.filter((ms) => t > ms).length % 2 === 1;
+    neon.emissiveIntensity = on ? 2.2 : 0.15;
+    if (t <= NEON_WARMUP_MS) invalidate();
+  });
+
+  return (
+    <group position={HALL_SIGN} scale={WALL_SIGN_SCALE}>
+      <primitive object={sign} />
+      <pointLight position={[0, 0, 0.35]} color="#ff9a3c" intensity={0.6} distance={1.6} decay={2} />
     </group>
   );
 }
@@ -137,6 +219,30 @@ function Chair({ position, rotation }: { position: [number, number, number]; rot
  * call board, sconces and other tables under their lamps, fading into the
  * warm haze (scene fog) so the machine stays the focus.
  */
+/** Soft spotlight from the ceiling onto the back wall. */
+function WallWash() {
+  const target = useMemo(() => {
+    const o = new THREE.Object3D();
+    o.position.set(-1.2, 0.3, BACK_Z);
+    return o;
+  }, []);
+  return (
+    <>
+      <primitive object={target} />
+      <spotLight
+        position={[-0.9, 2.2, -0.4]}
+        target={target}
+        angle={0.75}
+        penumbra={0.9}
+        intensity={7}
+        distance={5}
+        decay={2}
+        color="#ffbf80"
+      />
+    </>
+  );
+}
+
 export function Room() {
   const { carpet, wallpaper, panelWood } = useMemo(
     () => ({ carpet: carpetTexture([14, 14]), wallpaper: wallpaperTexture([14, 2]), panelWood: woodTexture([3, 1], 5) }),
@@ -193,9 +299,16 @@ export function Room() {
 
       <CallBoard />
 
-      {/* Wall sconces either side of the board. */}
-      {[-0.9, 2.1].map((x) => (
-        <group key={x} position={[x, FLOOR + 2.05, BACK_Z + 0.08]}>
+      <WithFallback>
+        <HallSign />
+      </WithFallback>
+
+      {/* A warm wash down the back wall, so the hall reads behind the table. */}
+      <WallWash />
+
+      {/* Wall sconces either side of the signs. */}
+      {[-2.2, 0.38].map((x) => (
+        <group key={x} position={[x, 0.52, BACK_Z + 0.08]}>
           <mesh material={brass}>
             <cylinderGeometry args={[0.05, 0.07, 0.04, 16]} />
           </mesh>
@@ -206,20 +319,17 @@ export function Room() {
         </group>
       ))}
 
-      {/* Other tables in the hall, under their own lamps. */}
-      <group position={[-1.9, 0, -1.7]} rotation-y={0.25}>
+      {/* Other tables in the hall: one in the wall wash, one under its own lamp. */}
+      <group position={[-2.6, 0, -0.55]} rotation-y={0.35}>
         <Table />
         <Chair position={[0, FLOOR, 0.85]} rotation={Math.PI} />
         <Chair position={[0.6, FLOOR, 0.85]} rotation={Math.PI} />
-        <Chair position={[0.3, FLOOR, -0.75]} rotation={0} />
       </group>
-      <group position={[2.3, 0, -1.9]} rotation-y={-0.2}>
+      <group position={[2.6, 0, -0.9]} rotation-y={-0.2}>
         <Table />
         <Chair position={[-0.3, FLOOR, 0.85]} rotation={Math.PI} />
-        <Chair position={[0.4, FLOOR, -0.75]} rotation={0} />
       </group>
-      <Pendant position={[-1.8, 1.15, -1.6]} />
-      <Pendant position={[2.35, 1.2, -1.85]} />
+      <Pendant position={[2.6, 1.2, -0.85]} />
     </group>
   );
 }

@@ -67,8 +67,9 @@ export default function BingoStage() {
       }}
       aria-hidden
     >
-      <color attach="background" args={['#0b0604']} />
-      <fog attach="fog" args={['#0b0604', 2.2, 7]} />
+      {/* Warm haze that thickens with distance but leaves the back wall readable. */}
+      <color attach="background" args={['#120a06']} />
+      <fog attach="fog" args={['#120a06', 3.2, 11]} />
       <RedrawWhenVisible />
       <Lighting />
       <Room />

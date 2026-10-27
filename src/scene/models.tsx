@@ -14,6 +14,8 @@ export const MODEL_URLS = {
   crank: `${base}models/bingo-crank.glb`,
   /** The winner sign (assets-src/blender/build_sign.py); origin at the hook its chains hang from. */
   sign: `${base}models/bingo-sign.glb`,
+  /** The hall's neon name sign for the back wall; origin at its centre. */
+  hallSign: `${base}models/bingo-hall-sign.glb`,
 } as const;
 
 type ModelKey = keyof typeof MODEL_URLS;

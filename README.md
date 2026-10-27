@@ -35,7 +35,7 @@ blender -b --factory-startup --python-expr "STEP='build'; exec(open('assets-src/
 
 y después exportar abriendo `assets-src/blender/bombo_assets.blend` con `STEP='export'`.
 
-El cartel se construye igual con `build_sign.py` (`STEP='build'` guarda `bombo_sign.blend`) y se exporta sin interfaz:
+El cartel de la ganadora y el rótulo de neón «BOMBO» de la pared se construyen igual con `build_sign.py` (`STEP='build'` guarda `bombo_sign.blend`) y se exportan sin interfaz:
 
 ```bash
 blender -b assets-src/blender/bombo_sign.blend --python-expr "STEP='export'; exec(open('assets-src/blender/build_sign.py').read())"

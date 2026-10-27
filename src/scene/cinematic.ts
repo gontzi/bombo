@@ -18,6 +18,8 @@ export interface Pose {
   elevation: number;
   distance: number;
   roll: number;
+  /** Tilt up from looking straight at the target, radians: lets more of the hall into shot. */
+  pitch: number;
 }
 
 export interface Shot extends Omit<Pose, 'target'> {
@@ -52,23 +54,23 @@ export function cinematicShots(
   return [
     { at: 0, ...from, target: from.target.clone() },
     // Low and close while the cage gets going.
-    { at: t.spinUpEnd + 300, target: CAGE_CENTER, azimuth: az - 0.35, elevation: 0.2, distance: d * 0.6, roll: 0.035 },
+    { at: t.spinUpEnd + 300, target: CAGE_CENTER, azimuth: az - 0.35, elevation: 0.2, distance: d * 0.6, roll: 0.035, pitch: 0 },
     // Circling round the front as the balls tumble.
-    { at: t.mixEnd, target: CAGE_CENTER, azimuth: az - 1.05, elevation: 0.36, distance: d * 0.52, roll: -0.04 },
+    { at: t.mixEnd, target: CAGE_CENTER, azimuth: az - 1.05, elevation: 0.36, distance: d * 0.52, roll: -0.04, pitch: 0 },
     // Swing back round towards the exit as it slows.
-    { at: t.extractStart, target: PORT_VIEW, azimuth: az + 0.15, elevation: 0.3, distance: d * 0.5, roll: 0 },
+    { at: t.extractStart, target: PORT_VIEW, azimuth: az + 0.15, elevation: 0.3, distance: d * 0.5, roll: 0, pitch: 0 },
     // Tight on the winner as it enters the tube...
-    { at: t.portArrive, target: 'hero', azimuth: az + 0.7, elevation: 0.32, distance: d * 0.33, roll: 0.02 },
+    { at: t.portArrive, target: 'hero', azimuth: az + 0.7, elevation: 0.32, distance: d * 0.33, roll: 0.02, pitch: 0 },
     // ...and following it down the ramp, low.
-    { at: t.rampEnd, target: 'hero', azimuth: az + 0.35, elevation: 0.17, distance: d * 0.34, roll: 0 },
-    { at: t.settleEnd, target: TRAY_VIEW, azimuth: az + 0.2, elevation: 0.42, distance: d * 0.36, roll: 0 },
+    { at: t.rampEnd, target: 'hero', azimuth: az + 0.35, elevation: 0.17, distance: d * 0.34, roll: 0, pitch: 0 },
+    { at: t.settleEnd, target: TRAY_VIEW, azimuth: az + 0.2, elevation: 0.42, distance: d * 0.36, roll: 0, pitch: 0 },
     // Back to the result view: same as the camera rig's own, so the hand-off is seamless.
-    { at: cinematicEnd(t), target: resultTarget, azimuth: az, elevation: rest.elevation, distance: d * resultDistance, roll: 0 },
+    { at: cinematicEnd(t), target: resultTarget, azimuth: az, elevation: rest.elevation, distance: d * resultDistance, roll: 0, pitch: 0 },
   ];
 }
 
-type Scalar = 'azimuth' | 'elevation' | 'distance' | 'roll';
-const SCALARS: Scalar[] = ['azimuth', 'elevation', 'distance', 'roll'];
+type Scalar = 'azimuth' | 'elevation' | 'distance' | 'roll' | 'pitch';
+const SCALARS: Scalar[] = ['azimuth', 'elevation', 'distance', 'roll', 'pitch'];
 
 /** Cubic Hermite through the shots, tangents from the neighbours: smooth through every shot, still at both ends. */
 function hermite(shots: readonly Shot[], key: Scalar, i: number, u: number): number {
@@ -113,6 +115,7 @@ export function placeCamera(camera: THREE.PerspectiveCamera, pose: Pose) {
   );
   camera.up.set(0, 1, 0);
   camera.lookAt(pose.target);
+  camera.rotateX(pose.pitch);
   camera.rotateZ(pose.roll);
 }
 

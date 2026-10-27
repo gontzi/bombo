@@ -1,5 +1,5 @@
 """
-Bombo: the hanging winner sign, built procedurally with bpy.
+Bombo: the hanging winner sign and the hall's neon name sign, built procedurally with bpy.
 
 A marquee board in the hall's materials: walnut back, brass frame studded
 with bulbs, an oxblood crest with raised brass "¡BOLA!" and two chains to
@@ -31,7 +31,7 @@ material, hex_color, bevel_hard_edges, _finalize = (
     helpers["material"], helpers["hex_color"], helpers["bevel_hard_edges"], helpers["_finalize"])
 
 SCENE_NAME = "BomboSign"
-OUT = os.path.join(ROOT, "public", "models", "bingo-sign.glb")
+EXPORTS = {"WinnerSign": "bingo-sign.glb", "HallSign": "bingo-hall-sign.glb"}
 BLEND = os.path.join(ROOT, "assets-src", "blender", "bombo_sign.blend")
 
 # Board, in metres. The face's aspect is mirrored in src/scene/sign/signTexture.ts (FACE_ASPECT).
@@ -43,10 +43,14 @@ BAND = 0.026
 FACE_W, FACE_H = W - 2 * BAND, H - 2 * BAND
 CHAIN_X = 0.34
 
-WALNUT, BRASS, ENAMEL, FACE, BULB = range(5)
+WALNUT, BRASS, ENAMEL, FACE, BULB, NEON = range(6)
 
 
 def make_materials():
+    neon = material("Neon", "#ffd08a", roughness=0.2)
+    p = next(n for n in neon.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
+    p.inputs["Emission Color"].default_value = (*hex_color("#ff9a2e"), 1.0)
+    p.inputs["Emission Strength"].default_value = 6.0
     bulb = material("Bulb", "#ffe3a6", roughness=0.15)
     p = next(n for n in bulb.node_tree.nodes if n.type == "BSDF_PRINCIPLED")
     p.inputs["Emission Color"].default_value = (*hex_color("#ffcf7a"), 1.0)
@@ -57,6 +61,7 @@ def make_materials():
         material("OxbloodEnamel", "#4a1410", roughness=0.3, coat=0.9, coat_roughness=0.12),
         material("SignFace", "#3a0f0c", roughness=0.35),
         bulb,
+        neon,
     ]
 
 
@@ -138,17 +143,23 @@ def bulb(x, y, z):
     return [socket, glass]
 
 
-def crest_text(z):
-    """Raised brass "¡BOLA!" from a text object, converted to mesh."""
-    curve = bpy.data.curves.new("CrestText", "FONT")
-    curve.body = "¡BOLA!"
+def text_mesh(body, size, center, mat, extrude=0.0, tube=0.0, space=1.0):
+    """Text as mesh, facing the viewer (+Z in three.js) and centred on `center`.
+    With `tube`, only the letter outlines are kept and swept as round tubes: neon."""
+    curve = bpy.data.curves.new("Text", "FONT")
+    curve.body = body
     curve.align_x = "CENTER"
     curve.align_y = "CENTER"
-    curve.size = 0.066
-    curve.extrude = 0.003
+    curve.size = size
+    curve.space_character = space
     curve.resolution_u = 4
-    curve.space_character = 1.12
-    obj = bpy.data.objects.new("CrestText", curve)
+    if tube:
+        curve.fill_mode = "NONE"
+        curve.bevel_depth = tube
+        curve.bevel_resolution = 2
+    else:
+        curve.extrude = extrude
+    obj = bpy.data.objects.new("Text", curve)
     bpy.context.scene.collection.objects.link(obj)
     depsgraph = bpy.context.evaluated_depsgraph_get()
     me = bpy.data.meshes.new_from_object(obj.evaluated_get(depsgraph))
@@ -159,9 +170,14 @@ def crest_text(z):
     bpy.data.meshes.remove(me)
     # Text lies in Blender XY facing +Z; stand it up facing the viewer (-Y).
     bmesh.ops.rotate(bm, verts=bm.verts, cent=(0, 0, 0), matrix=Matrix.Rotation(math.radians(90), 3, "X"))
-    bmesh.ops.translate(bm, verts=bm.verts, vec=B(0, TOP + 0.047, z))
-    _finalize(bm, BRASS)
+    bmesh.ops.translate(bm, verts=bm.verts, vec=B(*center))
+    _finalize(bm, mat)
     return bm
+
+
+def crest_text(z):
+    """Raised brass "¡BOLA!" on the crest."""
+    return text_mesh("¡BOLA!", 0.066, (0, TOP + 0.047, z), BRASS, extrude=0.003, space=1.12)
 
 
 def build_sign(mats, col):
@@ -193,6 +209,29 @@ def build_sign(mats, col):
     return obj
 
 
+# The hall's own sign: "BOMBO" in neon on a walnut board, for the back wall. Origin at its centre.
+HALL_W, HALL_H = 1.06, 0.46
+
+
+def build_hall_sign(mats, col):
+    front = 0.02
+    outer = rounded_rect(0, 0, HALL_W, HALL_H, 0.035, 8)
+    inner = rounded_rect(0, 0, HALL_W - 0.05, HALL_H - 0.05, 0.016, 8)
+    parts = [
+        slab(outer, -front, front, WALNUT, bevel=0.004),
+        ring(outer, inner, front, front + 0.012, BRASS, bevel=0.002),
+        slab(inner, front - 0.002, front + 0.002, ENAMEL),
+        # Neon letters stand off the board on short pins.
+        text_mesh("BOMBO", 0.215, (0, 0.035, front + 0.03), NEON, tube=0.0055, space=1.08),
+        text_mesh("SALA DE SORTEOS", 0.043, (0, -0.152, front + 0.004), BRASS, extrude=0.002, space=1.35),
+    ]
+    for x in (-0.36, -0.12, 0.12, 0.36):
+        for y in (0.11, -0.04):
+            parts.append(lathe([(0.0022, 0), (0.0022, 0.026), (0, 0.026)], BRASS, axis="z",
+                               center=(x, y, front + 0.002), segments=6))
+    return build_object("HallSign", parts, mats, col, smooth_angle=40)
+
+
 def face_uvs(obj):
     """UVs 0-1 across the face opening (u right, v up); everything else at 0."""
     me = obj.data
@@ -221,10 +260,15 @@ def scene():
 
 def build():
     sc = scene()
-    obj = build_sign(make_materials(), sc.collection)
-    tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
-    print(f"{obj.name}: tris~{tris} mats={[m.name for m in obj.data.materials]} dims={tuple(round(d, 3) for d in obj.dimensions)}")
-    bpy.data.libraries.write(BLEND, {sc, obj, obj.data, *obj.data.materials}, fake_user=True)
+    mats = make_materials()
+    objs = [build_sign(mats, sc.collection), build_hall_sign(mats, sc.collection)]
+    # Side by side for previewing; each exports on its own, from its own origin.
+    objs[1].location = B(1.4, -0.7, 0)
+    for obj in objs:
+        tris = sum(len(p.vertices) - 2 for p in obj.data.polygons)
+        print(f"{obj.name}: tris~{tris} mats={[m.name for m in obj.data.materials]} dims={tuple(round(d, 3) for d in obj.dimensions)}")
+    data = {sc, *objs, *(o.data for o in objs), *mats}
+    bpy.data.libraries.write(BLEND, data, fake_user=True)
     print("saved", BLEND)
 
 
@@ -235,17 +279,23 @@ def export():
             raise RuntimeError(f"Open bombo_sign.blend so '{SCENE_NAME}' is the active scene")
         bpy.context.window.scene = sc
     view_layer = bpy.context.view_layer
-    obj = sc.objects["WinnerSign"]
-    for o in view_layer.objects:
-        o.select_set(o == obj)
-    view_layer.objects.active = obj
     known = bpy.ops.export_scene.gltf.get_rna_type().properties.keys()
-    options = dict(filepath=OUT, export_format="GLB", use_selection=True, export_apply=True, export_yup=True,
-                   export_materials="EXPORT", export_texcoords=True, export_normals=True, export_tangents=False,
-                   export_cameras=False, export_lights=False, export_extras=False, export_animations=False)
-    bpy.ops.export_scene.gltf(**{k: v for k, v in options.items() if k in known})
-    print(f"{OUT}  {os.path.getsize(OUT) / 1024:.1f} KB")
-
+    for name, filename in EXPORTS.items():
+        obj = sc.objects[name]
+        for o in view_layer.objects:
+            o.select_set(o == obj)
+        view_layer.objects.active = obj
+        # Export from the origin, whatever the preview layout.
+        placed = obj.location.copy()
+        obj.location = (0, 0, 0)
+        out = os.path.join(ROOT, "public", "models", filename)
+        options = dict(filepath=out, export_format="GLB", use_selection=True, export_apply=True, export_yup=True,
+                       export_materials="EXPORT", export_texcoords=name == "WinnerSign", export_normals=True,
+                       export_tangents=False, export_cameras=False, export_lights=False, export_extras=False,
+                       export_animations=False)
+        bpy.ops.export_scene.gltf(**{k: v for k, v in options.items() if k in known})
+        obj.location = placed
+        print(f"{out}  {os.path.getsize(out) / 1024:.1f} KB")
 
 if "STEP" in globals():
     if STEP == "build":

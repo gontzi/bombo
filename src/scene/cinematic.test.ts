@@ -9,6 +9,7 @@ const pose = (target: THREE.Vector3, distance: number): Pose => ({
   elevation: 0.46,
   distance,
   roll: 0,
+  pitch: 0,
 });
 
 describe('cinematic camera', () => {

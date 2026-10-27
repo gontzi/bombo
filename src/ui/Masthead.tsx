@@ -1,7 +1,7 @@
 import { useBingoStore } from '../state/store';
 import { IconMusicOff, IconMusicOn, IconSoundOff, IconSoundOn } from './icons';
 
-/** Hall sign: brass-framed enamel with the house name. */
+/** Sound controls over the hall. The hall's name is the neon sign on the back wall (scene/room/Room.tsx). */
 export function Masthead() {
   const sound = useBingoStore((s) => s.sound);
   const setSound = useBingoStore((s) => s.setSound);
@@ -10,10 +10,7 @@ export function Masthead() {
 
   return (
     <header className="masthead">
-      <div className="sign">
-        <h1 className="sign__title">Bombo</h1>
-        <p className="sign__tagline">Sala de sorteos · desde hoy</p>
-      </div>
+      <h1 className="visually-hidden">Bombo · Sala de sorteos</h1>
       <button
         type="button"
         className="icon-button masthead__music"
