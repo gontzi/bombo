@@ -42,7 +42,8 @@ export function App() {
       <div className="controls">
         <DrawButton />
       </div>
-      <aside className="sidebar" aria-label="Opciones y bolas cantadas">
+      <aside className="sidebar clipboard" aria-label="Opciones y bolas cantadas">
+        <span className="clipboard__clip" aria-hidden />
         <EntryPanel />
       </aside>
       <Announcer />

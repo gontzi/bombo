@@ -12,6 +12,10 @@
   --glow: #ffcf7a;
   --cream: #f6e9cb;
 
+  /* The clipboard the cartón is clipped to */
+  --board: #34200f;
+  --board-hi: #5b3820;
+
   /* The cartón (paper card) */
   --paper: #f2e7cd;
   --paper-2: #e9dcbc;
