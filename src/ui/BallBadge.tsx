@@ -3,7 +3,7 @@ import { ballStyle } from '../theme/balls';
 
 interface Props {
   ball: number;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md';
 }
 
 /** A bingo ball in miniature: shell colour, white disc, number. Same look as the 3D balls. */

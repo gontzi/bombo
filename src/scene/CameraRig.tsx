@@ -2,8 +2,11 @@ import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useReducedMotion } from '../hooks/useReducedMotion';
+import type { DrawPlan } from '../domain/draw';
 import { useBingoStore } from '../state/store';
-import { LAYOUT, TRAY_CENTER } from './bingo/layout';
+import { heroTracker } from './bingo/hero';
+import { LAYOUT, PORT_INSIDE, TRAY_CENTER } from './bingo/layout';
+import { cinematicEnd, cinematicShots, evaluateShots, landingShake, placeCamera, type Pose, type Shot } from './cinematic';
 
 /** Three-quarter view from the front right and above: table top, cage depth and the chute all read. */
 const VIEW_DIRECTION = new THREE.Vector3(0.62, 0.5, 0.8).normalize();
@@ -15,9 +18,12 @@ const F = LAYOUT.frame;
 const CORNERS = [F.minX, F.maxX].flatMap((x) =>
   [F.minY, F.maxY].flatMap((y) => [F.minZ, F.maxZ].map((z) => new THREE.Vector3(x, y, z))),
 );
+const RESULT_Y = 0.62;
 const FRAME_CENTER = new THREE.Vector3((F.minX + F.maxX) / 2, (F.minY + F.maxY) / 2, (F.minZ + F.maxZ) / 2);
-/** Leaning towards the tray, and aimed higher so the machine sits lower, below the result plate. */
-const RESULT_TARGET = FRAME_CENTER.clone().lerp(TRAY_CENTER, 0.3).setY(FRAME_CENTER.y + 0.12);
+/** Leaning towards the tray, aimed and pulled back so the winner sign hanging above the cage is in shot. */
+const RESULT_TARGET = FRAME_CENTER.clone().lerp(TRAY_CENTER, 0.25).setY(RESULT_Y);
+/** Result framing distance, as a fraction of the machine's own framing distance. */
+export const RESULT_DISTANCE = 1.15;
 
 /** Width of the options panel when it overlays the scene (desktop), so the machine centres in the free area. */
 function panelOverlap(width: number): number {
@@ -50,10 +56,16 @@ function fitDistance(fov: number, aspect: number, direction: THREE.Vector3): num
   return far;
 }
 
+const angles = (direction: THREE.Vector3) => ({
+  azimuth: Math.atan2(direction.x, direction.z),
+  elevation: Math.asin(direction.y),
+});
+
 /**
- * Frames the machine for any screen, then eases in slightly while the cage
- * turns and moves towards the tray when the ball lands. No moves at all when
- * the user prefers reduced motion.
+ * Frames the machine for any screen. During a draw it plays the shot list in
+ * cinematic.ts (in close on the spinning cage, then after the ball down the
+ * chute) and ends on the result view; otherwise it eases between the idle
+ * and result framings. No moves at all when the user prefers reduced motion.
  */
 export function CameraRig() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -82,17 +94,51 @@ export function CameraRig() {
     invalidate();
   }, [camera, width, height, invalidate]);
 
+  /** The camera as last placed, so a draw can start from wherever it is. */
+  const pose = useRef<Pose>({ target: FRAME_CENTER.clone(), azimuth: 0, elevation: 0, distance: 0, roll: 0 });
+  const cine = useRef<{ plan: DrawPlan | null; startedAt: number; shots: Shot[] }>({ plan: null, startedAt: 0, shots: [] });
+
   useFrame((_, delta) => {
-    const focus = reducedMotion ? 'idle' : hasResult ? 'result' : drawing ? 'drawing' : 'idle';
-    const goalDistance = base.current.distance * (focus === 'result' ? 0.92 : focus === 'drawing' ? 0.94 : 1);
-    const goalTarget = focus === 'result' ? RESULT_TARGET : FRAME_CENTER;
     const c = current.current;
+    const { direction, distance } = base.current;
+    const draw = useBingoStore.getState().draw;
+
+    if (draw && draw.plan !== cine.current.plan && !draw.plan.reducedMotion && !reducedMotion) {
+      const rest = { target: FRAME_CENTER, ...angles(direction), distance, roll: 0 };
+      cine.current = {
+        plan: draw.plan,
+        startedAt: draw.startedAt,
+        shots: cinematicShots(draw.plan.timeline, pose.current, rest, RESULT_TARGET, RESULT_DISTANCE),
+      };
+    }
+
+    const plan = cine.current.plan;
+    const ms = performance.now() - cine.current.startedAt;
+    if (plan && ms < cinematicEnd(plan.timeline)) {
+      const hero = heroTracker.visible ? heroTracker.position : PORT_INSIDE;
+      const p = evaluateShots(cine.current.shots, ms, hero, pose.current);
+      p.roll += landingShake(plan.timeline, ms) * 0.012;
+      placeCamera(camera, p);
+      // Hand over to the regular framing exactly where the shot list ends.
+      c.target.copy(RESULT_TARGET);
+      c.distance = distance * RESULT_DISTANCE;
+      camera.near = 0.03;
+      camera.far = p.distance + 14;
+      camera.updateProjectionMatrix();
+      invalidate();
+      return;
+    }
+
+    const focus = reducedMotion ? 'idle' : hasResult ? 'result' : drawing ? 'drawing' : 'idle';
+    const goalDistance = distance * (focus === 'result' ? RESULT_DISTANCE : focus === 'drawing' ? 0.94 : 1);
+    const goalTarget = focus === 'result' ? RESULT_TARGET : FRAME_CENTER;
     const k = reducedMotion ? 1 : 1 - Math.exp(-delta * 2.2);
     c.distance += (goalDistance - c.distance) * k;
     c.target.lerp(goalTarget, k);
 
-    camera.position.copy(c.target).addScaledVector(base.current.direction, c.distance);
-    camera.lookAt(c.target);
+    pose.current.target.copy(c.target);
+    Object.assign(pose.current, angles(direction), { distance: c.distance, roll: 0 });
+    placeCamera(camera, pose.current);
     camera.near = 0.05;
     camera.far = c.distance + 14;
     camera.updateProjectionMatrix();

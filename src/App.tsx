@@ -7,7 +7,6 @@ import { Announcer } from './ui/Announcer';
 import { DrawButton } from './ui/DrawButton';
 import { EntryPanel } from './ui/EntryPanel';
 import { Masthead } from './ui/Masthead';
-import { ResultPlate } from './ui/ResultPlate';
 import { SceneBoundary } from './ui/SceneBoundary';
 
 const BingoStage = lazy(() => import('./scene/BingoStage'));
@@ -39,7 +38,6 @@ export function App() {
         </div>
         <Masthead />
         {isEmpty && <p className="stage__empty">El bombo está vacío: mete opciones en el cartón</p>}
-        <ResultPlate />
       </main>
       <div className="controls">
         <DrawButton />

@@ -1,4 +1,5 @@
 import { useDraw } from '../hooks/useDraw';
+import { useBingoStore } from '../state/store';
 
 /**
  * The real draw button is the one on the table (scene/bingo/PushButton).
@@ -8,6 +9,10 @@ import { useDraw } from '../hooks/useDraw';
 export function DrawButton() {
   const { isDrawing, canDraw, draw } = useDraw();
   const empty = !canDraw && !isDrawing;
+  // The winner is still in the tray (and in the list): it can be picked out.
+  const winnerInTray = useBingoStore(
+    (s) => !!s.lastResult && s.entries.some((e) => e.id === s.lastResult!.entryId),
+  );
 
   return (
     <div className="console">
@@ -27,6 +32,14 @@ export function DrawButton() {
           'Mete al menos una bola en el bombo'
         ) : isDrawing ? (
           'Sorteando…'
+        ) : winnerInTray ? (
+          <>
+            Toca la bola de la bandeja para quitarla
+            <span className="console__key">
+              {' '}
+              <span aria-hidden>·</span> botón rojo para otra
+            </span>
+          </>
         ) : (
           <>
             Pulsa el botón rojo de la mesa

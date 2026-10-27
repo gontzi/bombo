@@ -8,6 +8,7 @@ Sorteos de bingo para cualquier decisión: escribe tus opciones, cada una se con
 - El ganador se elige de forma uniforme (`crypto`, muestreo por rechazo) antes de animar; la escena solo representa ese resultado.
 - Física propia de las bolas en la jaula y trayectoria continua de la ganadora por el conducto hasta la bandeja.
 - Piezas de la máquina modeladas en Blender (`assets-src/blender/build_bingo.py`), con medidas compartidas en `src/scene/bingoLayout.json`.
+- La ganadora se anuncia en un cartel de marquesina colgante modelado en Blender (`assets-src/blender/build_sign.py`), que baja del techo con la bola cantada; al tocar la bola de la bandeja se quita del bombo.
 - Sonidos y música de fondo (un trío de jazz lento: piano eléctrico, contrabajo, escobillas y vibráfono) sintetizados con Web Audio, sin archivos; opciones e historial guardados en el navegador.
 
 ## Desarrollo
@@ -33,3 +34,9 @@ blender -b --factory-startup --python-expr "STEP='build'; exec(open('assets-src/
 ```
 
 y después exportar abriendo `assets-src/blender/bombo_assets.blend` con `STEP='export'`.
+
+El cartel se construye igual con `build_sign.py` (`STEP='build'` guarda `bombo_sign.blend`) y se exporta sin interfaz:
+
+```bash
+blender -b assets-src/blender/bombo_sign.blend --python-expr "STEP='export'; exec(open('assets-src/blender/build_sign.py').read())"
+```

@@ -5,11 +5,13 @@ import * as THREE from 'three';
 import { useSceneStatus } from '../state/sceneStatus';
 import { Machine } from './bingo/Machine';
 import { PushButton } from './bingo/PushButton';
+import { Sparkles } from './bingo/Sparkles';
 import { CameraRig } from './CameraRig';
 import { Lighting } from './Lighting';
-import { MODEL_URLS } from './models';
+import { MODEL_URLS, WithFallback } from './models';
 import { Room } from './room/Room';
 import { Table } from './room/Table';
+import { WinnerSign } from './sign/WinnerSign';
 
 /** With demand rendering, a tab that loaded hidden may never draw its first frame. */
 function RedrawWhenVisible() {
@@ -68,12 +70,17 @@ export default function BingoStage() {
       <color attach="background" args={['#0b0604']} />
       <fog attach="fog" args={['#0b0604', 2.2, 7]} />
       <RedrawWhenVisible />
-      <CameraRig />
       <Lighting />
       <Room />
       <Table />
       <Machine />
       <PushButton />
+      <Sparkles />
+      <WithFallback>
+        <WinnerSign />
+      </WithFallback>
+      {/* After Machine: its frame callback runs later, so it follows the ball where Machine just put it. */}
+      <CameraRig />
       <ReadyBoundary>
         <Suspense fallback={null}>
           <ModelsReady />

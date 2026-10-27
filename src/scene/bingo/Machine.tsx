@@ -11,10 +11,13 @@ import { BallAtlas, createBallMaterial, createHeroTexture } from './ballTextures
 import { Cage } from './Cage';
 import { ExtractionPath, RETURN_MS, ReturnPath } from './extraction';
 import { FallbackChute, FallbackCrank, FallbackFrame } from './fallbacks';
+import { heroTracker } from './hero';
 import { CAGE_CENTER, CAGE_RADIUS, LAYOUT, PORT_INSIDE, ballRadiusFor, trayRestPosition } from './layout';
 
 /** Top cage speed in rad/s (about 0.8 turns per second). */
 const OMEGA_MAX = 5.2;
+/** Picking the winner out of the tray: it hops up and shrinks away before leaving the list. */
+const PICK_MS = 320;
 
 type HeldMode = 'return' | 'extract' | 'tray';
 
@@ -57,7 +60,16 @@ export function Machine() {
     held: null as Held | null,
     lastPhase: 'waiting' as ExtractionPhase,
     heroPrev: new THREE.Vector3(),
+    /** When the ball in the tray was clicked to take it out of the cage. */
+    pickedAt: null as number | null,
   });
+
+  /** The ball resting in the tray, if it can be taken out (not mid-draw, still in the list). */
+  const pickable = () => {
+    const held = rt.current.held;
+    const { draw, entries: list } = useBingoStore.getState();
+    return held?.mode === 'tray' && !draw && rt.current.pickedAt === null && list.some((e) => e.id === held.id);
+  };
 
   // Balls follow the list: same ids, same numbers, new ones roll in at the port.
   useEffect(() => {
@@ -70,7 +82,10 @@ export function Machine() {
     atlas.draw(entries.map((e) => e.ball));
     (ballMaterial.userData.atlasRows as { value: number }).value = atlas.rows;
     const held = rt.current.held;
-    if (held && !entries.some((e) => e.id === held.id)) rt.current.held = null;
+    if (held && !entries.some((e) => e.id === held.id)) {
+      rt.current.held = null;
+      rt.current.pickedAt = null;
+    }
     invalidate();
   }, [entries, radius, sim, atlas, ballMaterial, invalidate]);
 
@@ -231,15 +246,27 @@ export function Machine() {
             hero.quaternion.premultiply(rollQ);
           }
         }
+        let scale = r;
+        if (state.pickedAt !== null) {
+          const u = Math.min(1, (now - state.pickedAt) / PICK_MS);
+          heroPos.y += Math.sin(u * Math.PI) * r * 2.2;
+          scale = r * (1 - u * u);
+          if (u >= 1) {
+            state.pickedAt = null;
+            useBingoStore.getState().removeEntry(held.id);
+          }
+        }
         hero.position.copy(heroPos);
-        hero.scale.setScalar(r);
+        hero.scale.setScalar(Math.max(scale, 1e-4));
         const ball = sim.balls.get(held.id);
         if (ball) ball.position.copy(heroPos);
       }
       state.heroPrev.copy(heroPos);
+      heroTracker.visible = hero.visible;
+      if (hero.visible) heroTracker.position.copy(heroPos);
     }
 
-    if (draw || sim.awake || state.held?.mode === 'return') invalidate();
+    if (draw || sim.awake || state.held?.mode === 'return' || state.pickedAt !== null) invalidate();
   });
 
   return (
@@ -259,7 +286,33 @@ export function Machine() {
         <Cage ref={cageRef} />
       </group>
       <instancedMesh ref={ballsRef} args={[sphere, ballMaterial, MAX_ENTRIES]} castShadow receiveShadow frustumCulled={false} />
-      <mesh ref={heroRef} geometry={sphere} material={heroMaterial} castShadow visible={false} />
+      <mesh
+        ref={heroRef}
+        geometry={sphere}
+        material={heroMaterial}
+        castShadow
+        visible={false}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!pickable()) return;
+          rt.current.pickedAt = performance.now();
+          document.body.style.cursor = '';
+          invalidate();
+        }}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          if (pickable()) document.body.style.cursor = 'pointer';
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = '';
+        }}
+      >
+        {/* A bigger, invisible target round the ball: it is small on screen. */}
+        <mesh scale={2.2}>
+          <sphereGeometry args={[1, 12, 8]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      </mesh>
     </group>
   );
 }
