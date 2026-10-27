@@ -9,6 +9,7 @@ import { Sparkles } from './bingo/Sparkles';
 import { CameraRig } from './CameraRig';
 import { Lighting } from './Lighting';
 import { MODEL_URLS, WithFallback } from './models';
+import { PostEffects } from './PostEffects';
 import { Room } from './room/Room';
 import { Table } from './room/Table';
 import { WinnerSign } from './sign/WinnerSign';
@@ -82,6 +83,7 @@ export default function BingoStage() {
       </WithFallback>
       {/* After Machine: its frame callback runs later, so it follows the ball where Machine just put it. */}
       <CameraRig />
+      <PostEffects />
       <ReadyBoundary>
         <Suspense fallback={null}>
           <ModelsReady />

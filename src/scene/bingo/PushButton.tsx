@@ -5,6 +5,7 @@ import { playButton, unlockAudio } from '../../audio/sounds';
 import { requestDraw } from '../../hooks/useDraw';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useBingoStore } from '../../state/store';
+import { glowRef } from '../bloom';
 import { brass, brushedSteel } from '../materials';
 import { woodTexture } from '../room/textures';
 import { LAYOUT } from './layout';
@@ -12,22 +13,37 @@ import { LAYOUT } from './layout';
 const BTN = LAYOUT.button;
 const SLOPE = Math.atan2(BTN.backHeight - BTN.frontHeight, BTN.depth);
 
-/** Engraved brass name plate: dark lettering on a white map, tinted by the brass colour. */
+/** Name plate size on the console, metres: as wide as the slope allows, so it reads from the camera. */
+const PLATE_W = 0.17;
+const PLATE_H = 0.036;
+/** The lamp in the cap breathes now and then while a draw is possible: a few breaths every so often. */
+const BREATH_EVERY = 9;
+const BREATH_FOR = 3;
+
+/** Engraved brass name plate: deep-cut lettering filled with black enamel, on a white map tinted by the brass. */
 function plateTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 96;
+  c.width = 680;
+  c.height = Math.round((680 * PLATE_H) / PLATE_W);
   const ctx = c.getContext('2d')!;
+  const w = c.width;
+  const h = c.height;
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, 512, 96);
-  ctx.strokeStyle = 'rgba(40,24,8,0.55)';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(10, 10, 492, 76);
-  ctx.fillStyle = '#2a1806';
-  ctx.font = '800 54px "Barlow Condensed", "Arial Narrow", sans-serif';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(40,24,8,0.6)';
+  ctx.lineWidth = 4;
+  ctx.strokeRect(8, 8, w - 16, h - 16);
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(16, 16, w - 32, h - 32);
+  ctx.font = `800 ${Math.round(h * 0.6)}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+  ctx.letterSpacing = `${Math.round(h * 0.08)}px`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('SACAR  BOLA', 256, 52);
+  // The cut catches light on its lower edge.
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillText('SACAR BOLA', w / 2, h / 2 + 4);
+  ctx.fillStyle = '#1c1006';
+  ctx.fillText('SACAR BOLA', w / 2, h / 2 + 2);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 8;
@@ -130,6 +146,21 @@ export function PushButton() {
     };
   }, [hovered, canDraw]);
 
+  // Wake the frame loop as each breath starts; the frame loop keeps itself going until it ends.
+  useEffect(() => {
+    if (!canDraw || reducedMotion) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const next = () => {
+      const wait = (BREATH_EVERY - ((performance.now() / 1000) % BREATH_EVERY)) * 1000;
+      timer = setTimeout(() => {
+        invalidate();
+        next();
+      }, wait + 20);
+    };
+    next();
+    return () => clearTimeout(timer);
+  }, [canDraw, reducedMotion, invalidate]);
+
   useFrame((state, delta) => {
     const down = pressed.current || drawing;
     const goal = down ? BTN.travel : 0;
@@ -137,13 +168,23 @@ export function PushButton() {
     travel.current += (goal - travel.current) * k;
     if (capRef.current) capRef.current.position.y = -travel.current;
 
-    // Lamp inside the cap: soft glow when ready, a slow pulse while drawing, dark when empty.
+    // Lamp inside the cap: soft glow when ready (breathing now and then to invite a press),
+    // a quick pulse while drawing, dark when empty.
     const t = state.clock.elapsedTime;
-    const glow = drawing ? (reducedMotion ? 0.9 : 0.6 + 0.45 * Math.sin(t * 6)) : canDraw ? (hovered ? 0.55 : 0.28) : 0;
+    const phase = (performance.now() / 1000) % BREATH_EVERY;
+    const breathing = canDraw && !hovered && !reducedMotion && phase < BREATH_FOR;
+    const breath = breathing ? Math.sin((Math.PI * phase) / (BREATH_FOR / 2)) ** 2 : 0;
+    const idle = hovered ? 0.6 : 0.28 + 0.5 * breath;
+    const glow = drawing ? (reducedMotion ? 0.9 : 0.6 + 0.45 * Math.sin(t * 6)) : canDraw ? idle : 0;
     parts.capMaterial.emissiveIntensity += (glow - parts.capMaterial.emissiveIntensity) * Math.min(1, delta * 10);
     parts.capMaterial.color.set(canDraw || drawing ? '#c3271f' : '#5a4a44');
 
-    if (drawing || Math.abs(goal - travel.current) > 1e-5 || Math.abs(glow - parts.capMaterial.emissiveIntensity) > 0.01) {
+    if (
+      drawing ||
+      breathing ||
+      Math.abs(goal - travel.current) > 1e-5 ||
+      Math.abs(glow - parts.capMaterial.emissiveIntensity) > 0.01
+    ) {
       invalidate();
     }
   });
@@ -177,7 +218,7 @@ export function PushButton() {
       <group position={[0, mountY, mountZ]} rotation-x={SLOPE}>
         <mesh geometry={parts.bezel} material={brass} castShadow />
         <group ref={capRef}>
-          <mesh geometry={parts.cap} material={parts.capMaterial} castShadow position-y={0.002} />
+          <mesh geometry={parts.cap} material={parts.capMaterial} castShadow position-y={0.002} ref={glowRef} />
         </group>
         {[-1, 1].map((s) => (
           <mesh key={s} position={[s * BTN.capRadius * 2.4, 0.0, 0.0]} material={brushedSteel}>
@@ -185,8 +226,8 @@ export function PushButton() {
           </mesh>
         ))}
         {/* Engraved plate in front of the button, facing the player. */}
-        <mesh position={[0, 0.0005, BTN.capRadius + 0.026]} rotation-x={-Math.PI / 2}>
-          <planeGeometry args={[BTN.capRadius * 4, BTN.capRadius * 0.76]} />
+        <mesh position={[0, 0.0005, BTN.capRadius + 0.012 + PLATE_H / 2]} rotation-x={-Math.PI / 2}>
+          <planeGeometry args={[PLATE_W, PLATE_H]} />
           <primitive object={parts.plate} attach="material" />
         </mesh>
         {/* Generous invisible hit area, so the button is easy to press on small screens. */}

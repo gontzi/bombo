@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useBingoStore } from '../../state/store';
 import { ballStyle } from '../../theme/balls';
 import { LAYOUT } from '../bingo/layout';
+import { glowRef, BLOOM_LAYER } from '../bloom';
 import { brass } from '../materials';
 import { MODEL_URLS, WithFallback } from '../models';
 import { Table } from './Table';
@@ -88,7 +89,7 @@ function CallBoard() {
     if (!m) return;
     const since = performance.now() - calledAt.current;
     const flash = since < CALL_FLASH_MS ? (1 - since / CALL_FLASH_MS) ** 2 : 0;
-    m.emissiveIntensity = 0.7 + 1.3 * flash;
+    m.emissiveIntensity = 0.7 + 1.8 * flash;
     if (flash > 0) invalidate();
   });
 
@@ -101,7 +102,7 @@ function CallBoard() {
       <mesh position-z={0.002} material={brass}>
         <boxGeometry args={[1.3, 0.5, 0.004]} />
       </mesh>
-      <mesh position-z={0.006}>
+      <mesh position-z={0.006} ref={glowRef}>
         <planeGeometry args={[1.27, 0.476]} />
         <meshStandardMaterial
           ref={material}
@@ -131,6 +132,7 @@ function HallSign() {
       const source = mesh.material as THREE.MeshStandardMaterial;
       if (source.name === 'Neon') {
         neon = source.clone();
+        mesh.layers.enable(BLOOM_LAYER);
         neon.color.set('#ffc98a');
         neon.emissive.set('#ff9a2e');
         mesh.material = neon;
@@ -144,7 +146,7 @@ function HallSign() {
     const t = performance.now() - born.current;
     // A tube warming up: a few stutters, then steady.
     const on = t > NEON_WARMUP_MS || NEON_STUTTER.filter((ms) => t > ms).length % 2 === 1;
-    neon.emissiveIntensity = on ? 2.2 : 0.15;
+    neon.emissiveIntensity = on ? 3.2 : 0.15;
     if (t <= NEON_WARMUP_MS) invalidate();
   });
 
@@ -178,7 +180,7 @@ function Pendant({ position, light = true }: { position: [number, number, number
       <mesh geometry={shade}>
         <meshStandardMaterial color="#8a6a32" metalness={0.9} roughness={0.35} side={THREE.DoubleSide} />
       </mesh>
-      <mesh position-y={0.04}>
+      <mesh position-y={0.04} ref={glowRef}>
         <sphereGeometry args={[0.045, 16, 12]} />
         <meshStandardMaterial color="#fff2d6" emissive="#ffcc80" emissiveIntensity={6} />
       </mesh>
@@ -312,9 +314,9 @@ export function Room() {
           <mesh material={brass}>
             <cylinderGeometry args={[0.05, 0.07, 0.04, 16]} />
           </mesh>
-          <mesh position-y={0.09}>
+          <mesh position-y={0.09} ref={glowRef}>
             <sphereGeometry args={[0.06, 16, 12]} />
-            <meshStandardMaterial color="#fff2d6" emissive="#ffb866" emissiveIntensity={2.2} />
+            <meshStandardMaterial color="#fff2d6" emissive="#ffb866" emissiveIntensity={2.4} />
           </mesh>
         </group>
       ))}

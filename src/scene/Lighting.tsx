@@ -5,12 +5,16 @@ import * as THREE from 'three';
 import { useBingoStore } from '../state/store';
 import { CAGE_CENTER } from './bingo/layout';
 import { drama } from './cinematic';
+import { LightShaft } from './LightShaft';
 import { Pendant } from './room/Room';
 
 const HEMI = 0.16;
 const SPOT = 42;
 const SPOT_ANGLE = 0.5;
 const ENVIRONMENT = 0.32;
+/** The pendant's beam, from just under the shade down to the felt along the spotlight's axis. */
+const BEAM_FROM = new THREE.Vector3(0.05, 1.55, 0.32);
+const BEAM_TO = new THREE.Vector3(0.107, 0, 0.05);
 
 /**
  * Hall lighting kept to a few sources: a warm pendant over our table (the
@@ -75,6 +79,7 @@ export function Lighting() {
         shadow-camera-far={4}
       />
       <Pendant position={[0.05, 1.66, 0.32]} light={false} />
+      <LightShaft from={BEAM_FROM} to={BEAM_TO} angle={0.42} />
       <Environment resolution={128} frames={1}>
         <color attach="background" args={['#1c120c']} />
         <Lightformer form="circle" intensity={4} color="#ffd29a" position={[0, 3, 0.4]} scale={2} />

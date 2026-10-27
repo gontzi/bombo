@@ -1,8 +1,9 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { DrawPlan } from '../../domain/draw';
 import { useBingoStore } from '../../state/store';
+import { glowRef } from '../bloom';
 import { ballRadiusFor, trayRestPosition } from './layout';
 
 const COUNT = 120;
@@ -93,6 +94,9 @@ export function Sparkles() {
     mesh.visible = true;
     invalidate();
   });
+
+  // Sparks glow (bloom.ts).
+  useEffect(() => glowRef(points.current), []);
 
   return <points ref={points} geometry={geometry} material={material} visible={false} frustumCulled={false} />;
 }

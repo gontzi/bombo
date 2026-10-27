@@ -4,6 +4,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useBingoStore } from '../../state/store';
+import { BLOOM_LAYER } from '../bloom';
 import { MODEL_URLS } from '../models';
 import { createSignTexture, paintSign, signFontsReady } from './signTexture';
 
@@ -65,6 +66,7 @@ export function WinnerSign() {
         });
       } else if (source.name === 'Bulb') {
         bulbs = source.clone();
+        mesh.layers.enable(BLOOM_LAYER);
         bulbs.emissive = new THREE.Color('#ffcf7a');
         mesh.material = bulbs;
       }
@@ -136,7 +138,7 @@ export function WinnerSign() {
     const since = performance.now() - m.shownAt;
     const flashing = shown && since < FLASH_MS && !reducedMotion;
     if (bulbs) {
-      bulbs.emissiveIntensity = !shown ? 0.4 : flashing ? (Math.floor(since / 140) % 2 ? 3.2 : 0.6) : 2.2;
+      bulbs.emissiveIntensity = !shown ? 0.4 : flashing ? (Math.floor(since / 140) % 2 ? 3.6 : 0.6) : 2.4;
     }
 
     const moving =
