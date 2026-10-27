@@ -1,5 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { useHotkeys } from './hooks/useHotkeys';
+import { useMusic } from './hooks/useMusic';
 import { useSceneStatus } from './state/sceneStatus';
 import { useBingoStore } from './state/store';
 import { Announcer } from './ui/Announcer';
@@ -22,6 +23,7 @@ function LoadingVeil() {
 
 export function App() {
   useHotkeys();
+  useMusic();
   const isEmpty = useBingoStore((s) => s.entries.length === 0);
 
   return (

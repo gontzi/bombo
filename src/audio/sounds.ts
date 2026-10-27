@@ -144,6 +144,11 @@ function context(): AudioContext | null {
   return ctx;
 }
 
+/** The shared context, created on first use (the background music plays through it too). */
+export function audioContext(): AudioContext | null {
+  return context();
+}
+
 /** Must be called from a user gesture (the draw button). */
 export function unlockAudio(): void {
   const c = context();

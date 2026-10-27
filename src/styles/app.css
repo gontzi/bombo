@@ -214,8 +214,12 @@ kbd {
   color: var(--brass);
 }
 
-.masthead__sound {
+.masthead__music {
   margin-left: auto;
+}
+
+.masthead__sound {
+  margin-left: calc(var(--space-4) * -1 + var(--space-1));
 }
 
 /* ---------- Buttons ---------- */

@@ -36,6 +36,8 @@ interface PersistedState {
   entries: Entry[];
   history: DrawResult[];
   sound: boolean;
+  /** Background music, independent of the machine sounds. */
+  music: boolean;
 }
 
 export interface BingoState extends PersistedState {
@@ -57,6 +59,7 @@ export interface BingoState extends PersistedState {
   removeWinner: () => void;
   clearHistory: () => void;
   setSound: (on: boolean) => void;
+  setMusic: (on: boolean) => void;
 }
 
 export const HISTORY_LIMIT = 50;
@@ -117,6 +120,7 @@ function sanitizePersisted(raw: unknown): Partial<PersistedState> {
       .slice(0, HISTORY_LIMIT);
   }
   if (typeof raw.sound === 'boolean') out.sound = raw.sound;
+  if (typeof raw.music === 'boolean') out.music = raw.music;
   return out;
 }
 
@@ -126,6 +130,7 @@ export const useBingoStore = create<BingoState>()(
       entries: createEntries(SAMPLE_LABELS),
       history: [],
       sound: true,
+      music: true,
       draw: null,
       lastResult: null,
       notice: null,
@@ -238,12 +243,19 @@ export const useBingoStore = create<BingoState>()(
       clearHistory: () => set({ history: [], notice: notice('Historial de bolas borrado') }),
 
       setSound: (on) => set({ sound: on }),
+
+      setMusic: (on) => set({ music: on }),
     }),
     {
       name: 'bombo:v1',
       version: 1,
       storage: createJSONStorage(() => safeStorage),
-      partialize: (s): PersistedState => ({ entries: s.entries, history: s.history, sound: s.sound }),
+      partialize: (s): PersistedState => ({
+        entries: s.entries,
+        history: s.history,
+        sound: s.sound,
+        music: s.music,
+      }),
       merge: (persisted, current) => ({ ...current, ...sanitizePersisted(persisted) }),
     },
   ),

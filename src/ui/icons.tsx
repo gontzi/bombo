@@ -32,3 +32,20 @@ export const IconSoundOff = () => (
     <path d="M16.5 9.5l5 5M21.5 9.5l-5 5" />
   </svg>
 );
+
+export const IconMusicOn = () => (
+  <svg {...base}>
+    <path d="M9 17V5l11-2v12" />
+    <circle cx="6.5" cy="17" r="2.5" />
+    <circle cx="17.5" cy="15" r="2.5" />
+  </svg>
+);
+
+export const IconMusicOff = () => (
+  <svg {...base}>
+    <path d="M9 17V5l11-2v12" />
+    <circle cx="6.5" cy="17" r="2.5" />
+    <circle cx="17.5" cy="15" r="2.5" />
+    <path d="M3 3l18 18" />
+  </svg>
+);
