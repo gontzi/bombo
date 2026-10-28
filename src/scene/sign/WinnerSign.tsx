@@ -6,6 +6,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { useBingoStore } from '../../state/store';
 import { BLOOM_LAYER } from '../bloom';
 import { MODEL_URLS } from '../models';
+import { queueWarmup } from '../warmup';
 import { createSignTexture, paintSign, signFontsReady } from './signTexture';
 
 /** Where the chains hang from (the model's origin), lowered. Above the cage, a little behind it. */
@@ -16,6 +17,7 @@ const RAISED = 1.25;
 const PENDULUM = 0.72;
 const FLASH_MS = 2600;
 const STEP = 1 / 120;
+const GLOW = 0.5;
 
 interface Motion {
   y: number;
@@ -41,6 +43,7 @@ export function WinnerSign() {
   const reducedMotion = useReducedMotion();
   const result = useBingoStore((s) => (s.draw ? null : s.lastResult));
   const group = useRef<THREE.Group>(null);
+  const glow = useRef<THREE.PointLight>(null);
 
   const { sign, texture, canvas, bulbs } = useMemo(() => {
     const sign = scene.clone(true);
@@ -75,6 +78,15 @@ export function WinnerSign() {
   }, [scene]);
 
   useEffect(() => () => texture.dispose(), [texture]);
+
+  // Get the first showing's work done now: the face painted at full size (so later results only
+  // overwrite the same texture), its fonts fetched, and every material compiled (warmup.tsx).
+  useEffect(() => {
+    paintSign(canvas, { ball: 1, label: '' });
+    texture.needsUpdate = true;
+    queueWarmup(sign);
+    void signFontsReady();
+  }, [sign, canvas, texture]);
 
   // Paint the winner as soon as it is known; repaint once the fonts are in.
   useEffect(() => {
@@ -132,7 +144,10 @@ export function WinnerSign() {
 
     g.position.set(SIGN_HOOK.x, SIGN_HOOK.y + m.y, SIGN_HOOK.z);
     g.rotation.set(m.tilt * 0.4, 0, m.swing * 0.35);
-    g.visible = m.y < RAISED - 0.01 || shown;
+    // Only the model hides: the light stays in the scene (dark) so that showing the sign never changes
+    // the light count, which would make three.js recompile every material in the hall on the spot.
+    sign.visible = m.y < RAISED - 0.01 || shown;
+    if (glow.current) glow.current.intensity = sign.visible ? GLOW : 0;
 
     // Marquee bulbs: a burst of flashing as it arrives, then a steady warm glow.
     const since = performance.now() - m.shownAt;
@@ -147,10 +162,10 @@ export function WinnerSign() {
   });
 
   return (
-    <group ref={group} visible={false}>
-      <primitive object={sign} />
+    <group ref={group} position={[SIGN_HOOK.x, SIGN_HOOK.y + RAISED, SIGN_HOOK.z]}>
+      <primitive object={sign} visible={false} />
       {/* The bulbs' own glow on the brass and walnut. */}
-      <pointLight position={[0, -0.72, 0.3]} color="#ffcf8a" intensity={0.5} distance={1.1} decay={2} />
+      <pointLight ref={glow} position={[0, -0.72, 0.3]} color="#ffcf8a" intensity={0} distance={1.1} decay={2} />
     </group>
   );
 }

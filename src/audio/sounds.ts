@@ -15,8 +15,8 @@ const banks: Partial<Record<ImpactKind | 'tray' | 'button', AudioBuffer[]>> = {}
 
 const VOLUME = 0.55;
 /** Simultaneous hits at most, and the minimum spacing between them. */
-const MAX_VOICES = 10;
-const MIN_GAP_MS = 7;
+const MAX_VOICES = 20;
+const MIN_GAP_MS = 3;
 const VARIANTS = 8;
 
 interface Mode {
@@ -189,10 +189,10 @@ function hit(kind: keyof typeof BODIES, gain: number, pan: number, rate: number)
  */
 export function playImpacts(impacts: readonly Impact[], pitch: number, centerX: number): void {
   if (!ready() || impacts.length === 0) return;
-  for (const impact of impacts.slice(0, 4)) {
-    const level = impact.strength ** 1.4;
+  for (const impact of impacts.slice(0, 8)) {
+    const level = impact.strength ** 1.2;
     if (level < 0.01) continue;
-    const gain = (impact.kind === 'wire' ? 0.16 : 0.24) * level;
+    const gain = (impact.kind === 'wire' ? 0.2 : 0.3) * level;
     hit(impact.kind, gain, (impact.x - centerX) * 2.4, pitch);
   }
 }

@@ -3,9 +3,12 @@ import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { DrawPlan } from '../domain/draw';
+import { useCrank } from '../state/crank';
+import { useRack } from '../state/rack';
 import { useBingoStore } from '../state/store';
 import { heroTracker } from './bingo/hero';
-import { LAYOUT, PORT_INSIDE, TRAY_CENTER } from './bingo/layout';
+import { CAGE_CENTER, LAYOUT, PORT_INSIDE, TRAY_CENTER } from './bingo/layout';
+import { RACK, RACK_FOCUS } from './rack/layout';
 import { cinematicEnd, cinematicShots, evaluateShots, landingShake, placeCamera, type Pose, type Shot } from './cinematic';
 
 /** Three-quarter view from the front right and above: table top, cage depth and the chute all read. */
@@ -29,13 +32,18 @@ const IDLE_PITCH = 0.045;
 /** Parallax: how far the view swings with the pointer across the screen (radians each way). */
 const PARALLAX_AZIMUTH = 0.07;
 const PARALLAX_ELEVATION = 0.035;
-
-/** Width of the options panel when it overlays the scene (desktop), so the machine centres in the free area. */
-function panelOverlap(width: number): number {
-  if (!window.matchMedia('(min-width: 861px)').matches) return 0;
-  const panel = document.querySelector('.sidebar');
-  return panel ? Math.min(width * 0.5, panel.getBoundingClientRect().width) : 0;
-}
+/**
+ * Crank mode: round to the machine's left, nearly side-on to the crank so its
+ * handle sweeps a circle on screen, with the cage behind it.
+ */
+const CRANK_TARGET = CAGE_CENTER.clone().add(new THREE.Vector3(LAYOUT.crank.x * 0.7, -0.04, 0.02));
+const CRANK_AZIMUTH = -1.2;
+const CRANK_ELEVATION = 0.2;
+const CRANK_DISTANCE = 0.5;
+/** Rack open: in close and from above, square on to its front, so every cup and number reads. */
+const RACK_AZIMUTH = RACK.yaw + 0.12;
+const RACK_ELEVATION = 0.62;
+const RACK_DISTANCE = 0.36;
 
 /** Closest distance at which every corner of the machine's bounds fits on screen. */
 function fitDistance(fov: number, aspect: number, direction: THREE.Vector3, pitch = 0): number {
@@ -86,7 +94,8 @@ const angles = (direction: THREE.Vector3) => ({
  * cinematic.ts (in close on the spinning cage, then after the ball down the
  * chute) and ends on the result view; otherwise it eases between the idle
  * and result framings and drifts gently with the pointer, so the hall has
- * depth. No moves at all when the user prefers reduced motion.
+ * depth, or swings round to the crank while it is being turned by hand.
+ * No moves at all when the user prefers reduced motion.
  */
 export function CameraRig() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
@@ -96,28 +105,28 @@ export function CameraRig() {
   const reducedMotion = useReducedMotion();
   const drawing = useBingoStore((s) => s.draw !== null);
   const hasResult = useBingoStore((s) => s.lastResult !== null);
+  const cranking = useCrank((s) => s.active);
+  const rackOpen = useRack((s) => s.open);
 
   /** `distance` frames the machine head-on; `idleDistance` frames it with the camera tilted up. */
   const base = useRef({ distance: 2, idleDistance: 2, direction: VIEW_DIRECTION.clone() });
-  const current = useRef({ distance: 0, target: FRAME_CENTER.clone(), pitch: IDLE_PITCH });
+  const current = useRef({ distance: 0, target: FRAME_CENTER.clone(), pitch: IDLE_PITCH, azimuth: 0, elevation: 0 });
   /** Smoothed pointer, and how much of it applies (0 right after a draw's shot list, easing back to 1). */
   const parallax = useRef({ x: 0, y: 0, weight: 1 });
   const tmp = useMemo(() => new THREE.Vector3(), []);
 
   useLayoutEffect(() => {
-    const overlap = panelOverlap(width);
-    const free = Math.max(1, width - overlap);
-    const aspect = free / Math.max(1, height);
+    const aspect = width / Math.max(1, height);
     const direction = aspect < 0.9 ? PORTRAIT_DIRECTION : VIEW_DIRECTION;
     base.current = {
       distance: fitDistance(camera.fov, aspect, direction),
       idleDistance: fitDistance(camera.fov, aspect, direction, IDLE_PITCH),
       direction,
     };
-    if (current.current.distance === 0) current.current.distance = base.current.idleDistance;
-    camera.aspect = width / Math.max(1, height);
-    if (overlap > 0) camera.setViewOffset(width, height, overlap / 2, 0, width, height);
-    else camera.clearViewOffset();
+    if (current.current.distance === 0) {
+      Object.assign(current.current, { distance: base.current.idleDistance, ...angles(direction) });
+    }
+    camera.aspect = aspect;
     camera.updateProjectionMatrix();
     invalidate();
   }, [camera, width, height, invalidate]);
@@ -160,6 +169,7 @@ export function CameraRig() {
       c.target.copy(RESULT_TARGET);
       c.distance = distance * RESULT_DISTANCE;
       c.pitch = 0;
+      Object.assign(c, angles(direction));
       par.weight = 0;
       camera.near = 0.03;
       camera.far = p.distance + 14;
@@ -168,28 +178,39 @@ export function CameraRig() {
       return;
     }
 
-    const focus = reducedMotion ? 'idle' : hasResult ? 'result' : drawing ? 'drawing' : 'idle';
+    const focus = rackOpen ? 'rack' : cranking ? 'crank' : reducedMotion ? 'idle' : hasResult ? 'result' : drawing ? 'drawing' : 'idle';
+    const rest = angles(direction);
     const goalDistance =
-      focus === 'result' ? distance * RESULT_DISTANCE : idleDistance * (focus === 'drawing' ? 0.94 : 1);
-    const goalTarget = focus === 'result' ? RESULT_TARGET : FRAME_CENTER;
-    const goalPitch = focus === 'result' ? 0 : IDLE_PITCH;
+      focus === 'crank'
+        ? distance * CRANK_DISTANCE
+        : focus === 'rack'
+          ? distance * RACK_DISTANCE
+          : focus === 'result'
+          ? distance * RESULT_DISTANCE
+          : idleDistance * (focus === 'drawing' ? 0.94 : 1);
+    const goalTarget =
+      focus === 'crank' ? CRANK_TARGET : focus === 'rack' ? RACK_FOCUS : focus === 'result' ? RESULT_TARGET : FRAME_CENTER;
+    const goalPitch = focus === 'idle' || focus === 'drawing' ? IDLE_PITCH : 0;
+    const goalAzimuth = focus === 'crank' ? CRANK_AZIMUTH : focus === 'rack' ? RACK_AZIMUTH : rest.azimuth;
+    const goalElevation = focus === 'crank' ? CRANK_ELEVATION : focus === 'rack' ? RACK_ELEVATION : rest.elevation;
     const k = reducedMotion ? 1 : 1 - Math.exp(-delta * 2.2);
     c.distance += (goalDistance - c.distance) * k;
     c.target.lerp(goalTarget, k);
     c.pitch += (goalPitch - c.pitch) * k;
+    c.azimuth += (goalAzimuth - c.azimuth) * k;
+    c.elevation += (goalElevation - c.elevation) * k;
 
-    // The pointer is followed lazily, and fades back in after a draw's shot list.
-    const follow = reducedMotion ? 0 : 1;
+    // The pointer is followed lazily (not while it is turning the crank), and fades back in after a draw's shot list.
+    const follow = reducedMotion || cranking || rackOpen ? 0 : 1;
     const kp = 1 - Math.exp(-delta * 2.5);
     par.x += (pointer.x * follow - par.x) * kp;
     par.y += (pointer.y * follow - par.y) * kp;
     par.weight += (1 - par.weight) * (1 - Math.exp(-delta * 1.2));
 
-    const rest = angles(direction);
     pose.current.target.copy(c.target);
     Object.assign(pose.current, {
-      azimuth: rest.azimuth + par.x * PARALLAX_AZIMUTH * par.weight,
-      elevation: rest.elevation - par.y * PARALLAX_ELEVATION * par.weight,
+      azimuth: c.azimuth + par.x * PARALLAX_AZIMUTH * par.weight,
+      elevation: c.elevation - par.y * PARALLAX_ELEVATION * par.weight,
       distance: c.distance,
       roll: 0,
       pitch: c.pitch,
@@ -202,6 +223,8 @@ export function CameraRig() {
     const settling =
       Math.abs(goalDistance - c.distance) > 1e-4 ||
       Math.abs(goalPitch - c.pitch) > 1e-5 ||
+      Math.abs(goalAzimuth - c.azimuth) > 1e-5 ||
+      Math.abs(goalElevation - c.elevation) > 1e-5 ||
       tmp.subVectors(goalTarget, c.target).lengthSq() > 1e-8;
     const drifting =
       Math.abs(pointer.x * follow - par.x) > 1e-4 || Math.abs(pointer.y * follow - par.y) > 1e-4 || 1 - par.weight > 1e-3;

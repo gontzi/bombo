@@ -4,20 +4,33 @@ import * as THREE from 'three';
 import { playClack, playImpacts, playRoll } from '../../audio/sounds';
 import { cageSpeed, extractionPhase, type DrawPlan, type ExtractionPhase } from '../../domain/draw';
 import { MAX_ENTRIES } from '../../domain/entries';
+import { crankDrive } from '../../state/crank';
 import { useBingoStore } from '../../state/store';
 import { ChuteModel, CrankModel, FrameModel, WithFallback } from '../models';
+import { queueWarmup } from '../warmup';
+import { arrivals } from './arrivals';
 import { BallSim } from './ballSim';
 import { BallAtlas, createBallMaterial, createHeroTexture } from './ballTextures';
 import { Cage } from './Cage';
+import { CrankControl } from './CrankControl';
 import { ExtractionPath, RETURN_MS, ReturnPath } from './extraction';
 import { FallbackChute, FallbackCrank, FallbackFrame } from './fallbacks';
 import { heroTracker } from './hero';
 import { CAGE_CENTER, CAGE_RADIUS, LAYOUT, PORT_INSIDE, ballRadiusFor, trayRestPosition } from './layout';
 
-/** Top cage speed in rad/s (about 0.8 turns per second). */
-const OMEGA_MAX = 5.2;
+/** Top cage speed in rad/s (about a turn per second, like a real hall cage). */
+const OMEGA_MAX = 6.3;
 /** Picking the winner out of the tray: it hops up and shrinks away before leaving the list. */
 const PICK_MS = 320;
+/** Turned by hand: the fastest the cage will go, and how quickly it coasts down once let go (per second). */
+const HAND_MAX = OMEGA_MAX * 1.3;
+const COAST = 0.7;
+/**
+ * Drawn by hand: let go, the cage keeps turning at least this fast (a last flick of the crank) until
+ * the timeline's `slowEnd`, then the operator's hand on the crank brings it to rest as the ball comes out.
+ */
+const HAND_SPIN = OMEGA_MAX * 0.6;
+const BRAKE = 1.4;
 
 type HeldMode = 'return' | 'extract' | 'tray';
 
@@ -38,6 +51,7 @@ interface Held {
 export function Machine() {
   const entries = useBingoStore((s) => s.entries);
   const invalidate = useThree((s) => s.invalidate);
+  const gl = useThree((s) => s.gl);
   const radius = ballRadiusFor(entries.length);
 
   // Created once; sync() keeps it up to date with the list.
@@ -56,6 +70,8 @@ export function Machine() {
   const rt = useRef({
     initialised: false,
     angle: 0,
+    /** Cage speed between draws, rad/s: what the hand gives it, coasting down when let go. */
+    spin: 0,
     plan: null as DrawPlan | null,
     held: null as Held | null,
     lastPhase: 'waiting' as ExtractionPhase,
@@ -77,7 +93,9 @@ export function Machine() {
       entries.map((e) => e.id),
       radius,
       !rt.current.initialised,
+      arrivals,
     );
+    for (const e of entries) arrivals.delete(e.id);
     rt.current.initialised = true;
     atlas.draw(entries.map((e) => e.ball));
     (ballMaterial.userData.atlasRows as { value: number }).value = atlas.rows;
@@ -112,6 +130,12 @@ export function Machine() {
     return t;
   };
 
+  // The extracted ball only shows mid-draw: compile it now, with a map so it is the same shader it will use.
+  useEffect(() => {
+    heroMaterial.map = heroTexture(useBingoStore.getState().entries[0]?.ball ?? 1);
+    queueWarmup(heroRef.current);
+  }, [heroMaterial]);
+
   const m4 = useMemo(() => new THREE.Matrix4(), []);
   const zero = useMemo(() => new THREE.Matrix4().makeScale(0, 0, 0), []);
   const scaleV = useMemo(() => new THREE.Vector3(), []);
@@ -135,6 +159,8 @@ export function Machine() {
       if (state.plan !== draw.plan) {
         state.plan = draw.plan;
         state.lastPhase = 'waiting';
+        // Paint and upload the winner's texture now, seconds before it leaves the cage.
+        gl.initTexture(heroTexture(draw.winner.ball));
         // The previous winner goes back into the cage before mixing starts.
         const held = state.held;
         if (held?.mode === 'tray' && sim.balls.has(held.id)) {
@@ -149,7 +175,21 @@ export function Machine() {
         }
       }
 
-      sim.omega = cageSpeed(t, ms) * OMEGA_MAX;
+      if (draw.plan.hand) {
+        // Keep the way and the speed the hand gave it, then slow it down.
+        if (ms < t.slowEnd) {
+          const goal = (state.spin < 0 ? -1 : 1) * Math.max(Math.abs(state.spin), HAND_SPIN);
+          state.spin += (goal - state.spin) * (1 - Math.exp(-dt * 3));
+        } else {
+          state.spin *= Math.exp(-dt * BRAKE);
+          if (Math.abs(state.spin) < 0.02) state.spin = 0;
+        }
+        crankDrive.take();
+      } else {
+        state.spin = cageSpeed(t, ms) * OMEGA_MAX;
+      }
+      sim.omega = state.spin;
+      state.angle += sim.omega * dt;
 
       const held = state.held;
       if (held?.mode === 'return' && held.back) {
@@ -190,7 +230,19 @@ export function Machine() {
         state.lastPhase = phase;
       }
     } else {
-      sim.omega = 0;
+      // Between draws the cage only turns by hand: the crank follows the hand exactly, the balls feel how
+      // fast that is, and once let go it coasts to a stop on its bearings.
+      const turned = crankDrive.take();
+      if (crankDrive.dragging) {
+        state.angle += turned;
+        const hand = THREE.MathUtils.clamp(turned / dt, -HAND_MAX, HAND_MAX);
+        state.spin += (hand - state.spin) * (1 - Math.exp(-dt * 18));
+      } else {
+        state.spin *= Math.exp(-dt * COAST);
+        if (Math.abs(state.spin) < 0.02) state.spin = 0;
+        state.angle += state.spin * dt;
+      }
+      sim.omega = state.spin;
       state.plan = null;
       const held = state.held;
       if (held && (held.mode === 'extract' || held.mode === 'tray')) {
@@ -201,8 +253,8 @@ export function Machine() {
     }
 
     sim.radius = r;
+    sim.angle = state.angle;
     sim.step(dt);
-    state.angle += sim.omega * dt;
     // Every audible collision of this frame becomes its own hit; smaller balls ring higher.
     const impacts = sim.drainImpacts();
     if (sound) playImpacts(impacts, Math.sqrt(LAYOUT.balls.maxRadius / r), CAGE_CENTER.x);
@@ -266,7 +318,9 @@ export function Machine() {
       if (hero.visible) heroTracker.position.copy(heroPos);
     }
 
-    if (draw || sim.awake || state.held?.mode === 'return' || state.pickedAt !== null) invalidate();
+    if (draw || sim.awake || state.spin !== 0 || crankDrive.dragging || state.held?.mode === 'return' || state.pickedAt !== null) {
+      invalidate();
+    }
   });
 
   return (
@@ -284,6 +338,7 @@ export function Machine() {
           </WithFallback>
         </group>
         <Cage ref={cageRef} />
+        <CrankControl />
       </group>
       <instancedMesh ref={ballsRef} args={[sphere, ballMaterial, MAX_ENTRIES]} castShadow receiveShadow frustumCulled={false} />
       <mesh
@@ -292,29 +347,39 @@ export function Machine() {
         material={heroMaterial}
         castShadow
         visible={false}
+        // Hidden, it must not catch the pointer: three.js raycasts invisible meshes too, and this
+        // one (and its wide target) would swallow clicks meant for anything behind it.
+        raycast={heroRaycast}
         onClick={(e) => {
-          e.stopPropagation();
           if (!pickable()) return;
+          e.stopPropagation();
           rt.current.pickedAt = performance.now();
           document.body.style.cursor = '';
           invalidate();
         }}
         onPointerOver={(e) => {
+          if (!pickable()) return;
           e.stopPropagation();
-          if (pickable()) document.body.style.cursor = 'pointer';
+          document.body.style.cursor = 'pointer';
         }}
         onPointerOut={() => {
           document.body.style.cursor = '';
         }}
       >
         {/* A bigger, invisible target round the ball: it is small on screen. */}
-        <mesh scale={2.2}>
+        <mesh scale={2.2} raycast={heroRaycast}>
           <sphereGeometry args={[1, 12, 8]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
       </mesh>
     </group>
   );
+}
+
+/** Raycasts like any mesh, but only while the extracted ball (the parent of its wide target, or itself) shows. */
+function heroRaycast(this: THREE.Mesh, raycaster: THREE.Raycaster, hits: THREE.Intersection[]) {
+  const hero = (this.parent as THREE.Mesh | null)?.isMesh ? this.parent! : this;
+  if (hero.visible) THREE.Mesh.prototype.raycast.call(this, raycaster, hits);
 }
 
 function releaseIntoCage(sim: BallSim, id: string, at: THREE.Vector3) {

@@ -51,12 +51,19 @@ export function cinematicShots(
 ): Shot[] {
   const az = rest.azimuth;
   const d = rest.distance;
+  // A draw by hand has no spin-up or mixing of its own: whoever turned the crank already watched that.
+  const mixing: Shot[] =
+    t.mixEnd > 0
+      ? [
+          // Low and close while the cage gets going.
+          { at: t.spinUpEnd + 300, target: CAGE_CENTER, azimuth: az - 0.35, elevation: 0.2, distance: d * 0.6, roll: 0.035, pitch: 0 },
+          // Circling round the front as the balls tumble.
+          { at: t.mixEnd, target: CAGE_CENTER, azimuth: az - 1.05, elevation: 0.36, distance: d * 0.52, roll: -0.04, pitch: 0 },
+        ]
+      : [];
   return [
     { at: 0, ...from, target: from.target.clone() },
-    // Low and close while the cage gets going.
-    { at: t.spinUpEnd + 300, target: CAGE_CENTER, azimuth: az - 0.35, elevation: 0.2, distance: d * 0.6, roll: 0.035, pitch: 0 },
-    // Circling round the front as the balls tumble.
-    { at: t.mixEnd, target: CAGE_CENTER, azimuth: az - 1.05, elevation: 0.36, distance: d * 0.52, roll: -0.04, pitch: 0 },
+    ...mixing,
     // Swing back round towards the exit as it slows.
     { at: t.extractStart, target: PORT_VIEW, azimuth: az + 0.15, elevation: 0.3, distance: d * 0.5, roll: 0, pitch: 0 },
     // Tight on the winner as it enters the tube...

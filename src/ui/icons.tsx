@@ -13,12 +13,6 @@ const base = {
   focusable: false,
 } as const satisfies SVGProps<SVGSVGElement>;
 
-export const IconClose = () => (
-  <svg {...base}>
-    <path d="M6 6l12 12M18 6L6 18" />
-  </svg>
-);
-
 export const IconSoundOn = () => (
   <svg {...base}>
     <path d="M4 10v4h3l5 4V6L7 10H4z" />

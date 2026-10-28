@@ -14,6 +14,8 @@ export const MODEL_URLS = {
   crank: `${base}models/bingo-crank.glb`,
   /** The winner sign (assets-src/blender/build_sign.py); origin at the hook its chains hang from. */
   sign: `${base}models/bingo-sign.glb`,
+  /** The ball rack beside the machine (assets-src/blender/build_rack.py); origin at its centre on the table. */
+  rack: `${base}models/bingo-rack.glb`,
   /** The hall's neon name sign for the back wall; origin at its centre. */
   hallSign: `${base}models/bingo-hall-sign.glb`,
 } as const;
@@ -41,6 +43,7 @@ function useModelScene(key: ModelKey): THREE.Object3D {
 export const FrameModel = () => <primitive object={useModelScene('frame')} />;
 export const ChuteModel = () => <primitive object={useModelScene('chute')} />;
 export const CrankModel = () => <primitive object={useModelScene('crank')} />;
+export const RackModel = () => <primitive object={useModelScene('rack')} />;
 
 class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
   state = { failed: false };

@@ -1,4 +1,4 @@
-/** First-visit list: a real, everyday decision rather than placeholder text. */
+/** The «Ejemplo» list: a real, everyday decision rather than placeholder text. */
 export const SAMPLE_LABELS = [
   'Pizza',
   'Sushi',

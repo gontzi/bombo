@@ -21,7 +21,7 @@ export function ConfirmButton({ onConfirm, children, confirmLabel = '¿Seguro?',
   return (
     <button
       type="button"
-      className={`${className ?? 'text-button'}${armed ? ' is-armed' : ''}`}
+      className={`${className ?? 'console__back'}${armed ? ' is-armed' : ''}`}
       disabled={disabled}
       onBlur={() => setArmed(false)}
       onClick={() => {

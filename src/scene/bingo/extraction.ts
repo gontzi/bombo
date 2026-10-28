@@ -72,15 +72,16 @@ export class ExtractionPath {
 }
 
 /**
- * Previous winner going back into the cage at the start of a draw: lifted
- * from the tray in an arc and dropped through a gap at the top of the cage
- * (the wire spacing there is wider than a ball).
+ * A ball going into the cage from outside: lifted in an arc and dropped
+ * through a gap at the top of the cage (the wire spacing there is wider than
+ * a ball). By default from the tray (the previous winner, at the start of a
+ * draw); the ball rack passes its cups.
  */
 export class ReturnPath {
   private readonly curve: THREE.CatmullRomCurve3;
 
-  constructor(radius: number) {
-    const rest = trayRestPosition(radius);
+  constructor(radius: number, from?: THREE.Vector3) {
+    const rest = from?.clone() ?? trayRestPosition(radius);
     const top = CAGE_CENTER.clone().setY(CAGE_CENTER.y + CAGE_RADIUS * 0.55).setX(0.04);
     this.curve = new THREE.CatmullRomCurve3(
       [
@@ -101,3 +102,51 @@ export class ReturnPath {
 }
 
 export const RETURN_MS = 650;
+
+const GRAVITY = 9.81;
+/** How far above the higher of start and landing a tossed ball peaks. */
+const TOSS_RISE = 0.16;
+
+/**
+ * A ball tossed into the cage from the ball rack: a true ballistic arc under
+ * gravity, from its cup up over the cage and down through the gap at its top
+ * to a point just inside, picked a little apart for each ball so they do not
+ * all land on the same spot. It ends with the speed it was falling at, which
+ * the cage simulation carries on with, so it drops onto the pile as if it had
+ * never left it.
+ */
+export class TossPath {
+  /** Seconds in the air. */
+  readonly duration: number;
+  /** Where it lands, inside the cage, and how fast it is going then. */
+  readonly end: THREE.Vector3;
+  readonly endVelocity: THREE.Vector3;
+  private readonly start: THREE.Vector3;
+  private readonly velocity: THREE.Vector3;
+
+  constructor(from: THREE.Vector3, radius: number, spread = Math.random()) {
+    const angle = spread * Math.PI * 2;
+    const reach = 0.02 + ((spread * 7.31) % 1) * 0.05;
+    this.end = CAGE_CENTER.clone().add(new THREE.Vector3(Math.cos(angle) * reach, CAGE_RADIUS * 0.6, Math.sin(angle) * reach));
+    const limit = CAGE_RADIUS - radius - 0.01;
+    const offset = this.end.clone().sub(CAGE_CENTER);
+    if (offset.length() > limit) this.end.copy(CAGE_CENTER).addScaledVector(offset.normalize(), limit);
+
+    this.start = from.clone();
+    const apex = Math.max(from.y, this.end.y) + TOSS_RISE;
+    const up = Math.sqrt(2 * GRAVITY * (apex - from.y));
+    this.duration = up / GRAVITY + Math.sqrt((2 * (apex - this.end.y)) / GRAVITY);
+    this.velocity = new THREE.Vector3(
+      (this.end.x - from.x) / this.duration,
+      up,
+      (this.end.z - from.z) / this.duration,
+    );
+    this.endVelocity = this.velocity.clone().setY(up - GRAVITY * this.duration);
+  }
+
+  /** Position `t` seconds into the toss. */
+  at(t: number, out: THREE.Vector3) {
+    const s = Math.min(Math.max(t, 0), this.duration);
+    return out.copy(this.start).addScaledVector(this.velocity, s).setY(this.start.y + this.velocity.y * s - 0.5 * GRAVITY * s * s);
+  }
+}

@@ -11,6 +11,9 @@ import {
 } from '../domain/entries';
 import { decideDraw, type DrawPlan } from '../domain/draw';
 import { SAMPLE_LABELS } from './sampleEntries';
+import layout from '../scene/bingoLayout.json';
+
+const LAYOUT_RACK = layout.rack;
 
 export interface DrawResult {
   readonly id: string;
@@ -45,15 +48,27 @@ export interface BingoState extends PersistedState {
   /** Result on show; its ball sits in the tray until the next draw. */
   lastResult: DrawResult | null;
   notice: Notice | null;
+  /**
+   * New options waiting in the ball rack, already numbered (around the balls
+   * in the cage too). They go into the cage one by one as the rack tips them in.
+   * There may be more than the rack has cups (`RACK_SLOTS`): the first ones
+   * sit in the cups and the rack tips itself into the cage to make room.
+   */
+  pending: Entry[];
 
+  addPending: (labels: readonly string[]) => number;
+  removePending: (id: string) => void;
+  /** Moves one waiting ball into the cage (called as it lands there). */
+  commitPending: (id: string) => void;
   addEntries: (labels: readonly string[]) => number;
   updateEntry: (id: string, label: string) => void;
   removeEntry: (id: string) => void;
   replaceAll: (labels: readonly string[]) => void;
-  resetToSample: () => void;
+  /** Drops the sample options into the ball rack, for a first try. */
+  addSample: () => number;
   clearEntries: () => void;
 
-  startDraw: (options?: { reducedMotion?: boolean }) => boolean;
+  startDraw: (options?: { reducedMotion?: boolean; hand?: boolean }) => boolean;
   completeDraw: () => void;
   dismissResult: () => void;
   removeWinner: () => void;
@@ -63,6 +78,8 @@ export interface BingoState extends PersistedState {
 }
 
 export const HISTORY_LIMIT = 50;
+/** Cups in the ball rack (bingoLayout.json: tiers × perTier). */
+export const RACK_SLOTS = LAYOUT_RACK.tiers * LAYOUT_RACK.perTier;
 
 let drawTimer: ReturnType<typeof setTimeout> | undefined;
 let noticeId = 0;
@@ -127,13 +144,54 @@ function sanitizePersisted(raw: unknown): Partial<PersistedState> {
 export const useBingoStore = create<BingoState>()(
   persist(
     (set, get) => ({
-      entries: createEntries(SAMPLE_LABELS),
+      // A first visit starts with an empty cage: options go in through the rack.
+      entries: [],
       history: [],
       sound: true,
       music: true,
       draw: null,
       lastResult: null,
       notice: null,
+      pending: [],
+
+      addPending: (labels) => {
+        const { entries, pending } = get();
+        const room = MAX_ENTRIES - entries.length - pending.length;
+        const clean = labels.map(cleanLabel).filter(Boolean);
+        const take = clean.slice(0, Math.max(0, room));
+        if (take.length === 0) {
+          if (clean.length > 0) set({ notice: notice(`El bombo admite como máximo ${MAX_ENTRIES} bolas.`) });
+          return 0;
+        }
+        const added = createEntries(take, [...entries, ...pending]);
+        const left = clean.length - take.length;
+        set({
+          pending: [...pending, ...added],
+          notice: notice(
+            left > 0
+              ? `El bombo admite como máximo ${MAX_ENTRIES} bolas: ${plural(left, 'opción se ha quedado', 'opciones se han quedado')} fuera`
+              : added.length === 1
+                ? `Bola ${added[0]!.ball} al portabolas: ${added[0]!.label}`
+                : `${plural(added.length, 'bola', 'bolas')} al portabolas`,
+          ),
+        });
+        return added.length;
+      },
+
+      removePending: (id) => set((s) => ({ pending: s.pending.filter((e) => e.id !== id) })),
+
+      commitPending: (id) => {
+        const { pending, entries } = get();
+        const entry = pending.find((e) => e.id === id);
+        if (!entry) return;
+        const room = entries.length < MAX_ENTRIES;
+        // Numbers were handed out with the cage as it was; keep them unique if it changed since.
+        const ball = entries.some((e) => e.ball === entry.ball) ? createEntries([entry.label], entries)[0]!.ball : entry.ball;
+        set({
+          pending: pending.filter((e) => e.id !== id),
+          entries: room ? [...entries, { ...entry, ball }] : entries,
+        });
+      },
 
       addEntries: (labels) => {
         const { draw, entries } = get();
@@ -188,20 +246,17 @@ export const useBingoStore = create<BingoState>()(
         });
       },
 
-      resetToSample: () => {
-        if (get().draw) return;
-        set({ entries: createEntries(SAMPLE_LABELS), lastResult: null, notice: notice('Bolas de ejemplo repuestas') });
-      },
+      addSample: () => get().addPending(SAMPLE_LABELS),
 
       clearEntries: () => {
         if (get().draw) return;
         set({ entries: [], lastResult: null, notice: notice('Bombo vacío') });
       },
 
-      startDraw: ({ reducedMotion = false } = {}) => {
+      startDraw: ({ reducedMotion = false, hand = false } = {}) => {
         const { draw, entries } = get();
         if (draw || entries.length === 0) return false;
-        const { plan, winner } = decideDraw(entries, { reducedMotion });
+        const { plan, winner } = decideDraw(entries, { reducedMotion, hand });
         set({
           draw: { plan, winner, startedAt: performance.now() },
           lastResult: null,

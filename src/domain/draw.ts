@@ -25,6 +25,8 @@ export interface DrawPlan {
   readonly winnerIndex: number;
   readonly entryCount: number;
   readonly reducedMotion: boolean;
+  /** Drawn by turning the crank: the cage is already spinning, so it only coasts down and lets the ball out. */
+  readonly hand: boolean;
   readonly timeline: DrawTimeline;
 }
 
@@ -44,6 +46,22 @@ export const FULL_TIMELINE: DrawTimeline = {
   totalMs: 5600,
 };
 
+/**
+ * Drawn by hand: once the crank is let go the cage carries on spinning for a
+ * while on its own (`slowEnd`), then the ball starts out as it coasts and the
+ * rest plays as usual.
+ */
+export const HAND_TIMELINE: DrawTimeline = {
+  spinUpEnd: 0,
+  mixEnd: 0,
+  slowEnd: 1500,
+  extractStart: 1700,
+  portArrive: 2450,
+  rampEnd: 3350,
+  settleEnd: 3850,
+  totalMs: 4000,
+};
+
 /** No spinning, no mixing: the chosen ball simply travels out (prefers-reduced-motion). */
 export const REDUCED_TIMELINE: DrawTimeline = {
   spinUpEnd: 0,
@@ -58,6 +76,7 @@ export const REDUCED_TIMELINE: DrawTimeline = {
 
 export interface DecideOptions {
   reducedMotion?: boolean;
+  hand?: boolean;
   source?: Uint32Source;
 }
 
@@ -68,7 +87,7 @@ export interface DecideOptions {
  */
 export function decideDraw(
   entries: readonly Entry[],
-  { reducedMotion = false, source = cryptoUint32 }: DecideOptions = {},
+  { reducedMotion = false, hand = false, source = cryptoUint32 }: DecideOptions = {},
 ): DrawDecision {
   if (entries.length === 0) throw new Error('decideDraw: no entries');
   const winnerIndex = randomInt(entries.length, source);
@@ -80,7 +99,8 @@ export function decideDraw(
       winnerIndex,
       entryCount: entries.length,
       reducedMotion,
-      timeline: reducedMotion ? REDUCED_TIMELINE : FULL_TIMELINE,
+      hand: hand && !reducedMotion,
+      timeline: reducedMotion ? REDUCED_TIMELINE : hand ? HAND_TIMELINE : FULL_TIMELINE,
     },
   };
 }
@@ -93,7 +113,7 @@ export const smoothstep = (x: number) => {
 
 /** Speed the cage turns at, as a fraction of its top speed. */
 export function cageSpeed(t: DrawTimeline, ms: number): number {
-  if (t.spinUpEnd === 0 && t.slowEnd === 0) return 0;
+  if (t.spinUpEnd === 0) return 0;
   if (ms <= 0) return 0;
   if (ms < t.spinUpEnd) return smoothstep(ms / t.spinUpEnd);
   if (ms < t.mixEnd) return 1;

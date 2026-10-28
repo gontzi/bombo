@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import type { DrawPlan } from '../../domain/draw';
 import { useBingoStore } from '../../state/store';
 import { glowRef } from '../bloom';
+import { queueWarmup } from '../warmup';
 import { ballRadiusFor, trayRestPosition } from './layout';
 
 const COUNT = 120;
@@ -95,8 +96,11 @@ export function Sparkles() {
     invalidate();
   });
 
-  // Sparks glow (bloom.ts).
-  useEffect(() => glowRef(points.current), []);
+  // Sparks glow (bloom.ts), and are compiled up front rather than on the first landing.
+  useEffect(() => {
+    glowRef(points.current);
+    queueWarmup(points.current);
+  }, []);
 
   return <points ref={points} geometry={geometry} material={material} visible={false} frustumCulled={false} />;
 }

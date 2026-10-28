@@ -1,3 +1,4 @@
+import { useRack } from '../state/rack';
 import { useBingoStore } from '../state/store';
 import { IconMusicOff, IconMusicOn, IconSoundOff, IconSoundOn } from './icons';
 
@@ -11,6 +12,10 @@ export function Masthead() {
   return (
     <header className="masthead">
       <h1 className="visually-hidden">Bombo · Sala de sorteos</h1>
+      {/* The rack on the table opens the options; this is the same for the keyboard and screen readers. */}
+      <button type="button" className="visually-hidden-focusable masthead__options" onClick={() => useRack.getState().setOpen(true)}>
+        Opciones del bombo
+      </button>
       <button
         type="button"
         className="icon-button masthead__music"
