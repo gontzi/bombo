@@ -225,3 +225,83 @@ export function playClack(strength = 1): void {
 export function playButton(): void {
   hit('button', 0.38, -0.35, 1);
 }
+
+/** Hot metal fizzing: a hiss that swells and fades, for the smoking crank. */
+export function playHiss(durationSec = 1.6): void {
+  if (!ready() || !noise) return;
+  const c = ctx!;
+  const source = c.createBufferSource();
+  source.buffer = noise;
+  source.loop = true;
+  const high = c.createBiquadFilter();
+  high.type = 'bandpass';
+  high.frequency.value = 5200;
+  high.Q.value = 0.7;
+  const g = c.createGain();
+  const t = c.currentTime;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.09, t + 0.25);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + durationSec);
+  source.connect(high).connect(g).connect(master!);
+  source.start(t, Math.random() * 0.5);
+  source.stop(t + durationSec);
+}
+
+/** A neon tube shorting out: a mains buzz with a crackle on top, then a pop. */
+export function playShort(): void {
+  if (!ready() || !noise) return;
+  const c = ctx!;
+  const t = c.currentTime;
+  const buzz = c.createOscillator();
+  buzz.type = 'sawtooth';
+  buzz.frequency.value = 100;
+  const bg = c.createGain();
+  bg.gain.setValueAtTime(0.0001, t);
+  bg.gain.exponentialRampToValueAtTime(0.05, t + 0.05);
+  bg.gain.setValueAtTime(0.05, t + 0.55);
+  bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.62);
+  buzz.connect(bg).connect(master!);
+  buzz.start(t);
+  buzz.stop(t + 0.65);
+  const crackle = c.createBufferSource();
+  crackle.buffer = noise;
+  const cf = c.createBiquadFilter();
+  cf.type = 'highpass';
+  cf.frequency.value = 2500;
+  const cg = c.createGain();
+  // Irregular bursts, like arcing.
+  cg.gain.setValueAtTime(0.0001, t);
+  for (let i = 0; i < 9; i++) {
+    const at = t + 0.04 + Math.random() * 0.5;
+    cg.gain.setValueAtTime(0.12 * Math.random(), at);
+    cg.gain.setValueAtTime(0.0001, at + 0.02);
+  }
+  cg.gain.setValueAtTime(0.3, t + 0.6);
+  cg.gain.exponentialRampToValueAtTime(0.0001, t + 0.75);
+  crackle.connect(cf).connect(cg).connect(master!);
+  crackle.start(t, Math.random() * 0.3, 0.8);
+}
+
+/** A little brass fanfare: a rising arpeggio and a held chord. */
+export function playFanfare(): void {
+  if (!ready()) return;
+  const c = ctx!;
+  const t = c.currentTime;
+  const note = (freq: number, at: number, length: number, gain: number) => {
+    const o = c.createOscillator();
+    o.type = 'square';
+    o.frequency.value = freq;
+    const f = c.createBiquadFilter();
+    f.type = 'lowpass';
+    f.frequency.value = 2200;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t + at);
+    g.gain.exponentialRampToValueAtTime(gain, t + at + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + at + length);
+    o.connect(f).connect(g).connect(master!);
+    o.start(t + at);
+    o.stop(t + at + length + 0.05);
+  };
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => note(f, i * 0.11, 0.18, 0.05));
+  for (const f of [523.25, 659.25, 783.99, 1046.5]) note(f, 0.48, 0.9, 0.035);
+}

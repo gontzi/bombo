@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
+import { playShort } from '../../audio/sounds';
+import { partyOn, useEggs } from '../../state/eggs';
 import { useBingoStore } from '../../state/store';
 import { ballStyle } from '../../theme/balls';
 import { LAYOUT } from '../bingo/layout';
@@ -30,6 +32,14 @@ const CALL_FLASH_MS = 2200;
 /** Moments the neon flips on or off as it warms up, then it stays lit. */
 const NEON_STUTTER = [180, 260, 520, 600, 640, 1100, 1180];
 const NEON_WARMUP_MS = 1600;
+/** Easter egg: this many taps on the neon, each within this long of the last, and it shorts out. */
+const SHORT_TAPS = 5;
+const TAP_WINDOW_MS = 900;
+/** Shorting out: it fizzes and flickers, goes dark, then warms up again from cold. */
+const SHORT_FIZZ_MS = 650;
+const SHORT_DARK_MS = 3200;
+/** Party mode: how fast the neon and the board run through the colours (turns of the hue per second). */
+const PARTY_HUE_SPEED = 0.35;
 
 /** "BINGO" board on the back wall, lit with the last balls called; it blazes up when a new one comes in. */
 function CallBoard() {
@@ -87,10 +97,15 @@ function CallBoard() {
   useFrame(() => {
     const m = material.current;
     if (!m) return;
-    const since = performance.now() - calledAt.current;
+    const now = performance.now();
+    const since = now - calledAt.current;
     const flash = since < CALL_FLASH_MS ? (1 - since / CALL_FLASH_MS) ** 2 : 0;
-    m.emissiveIntensity = 0.7 + 1.8 * flash;
-    if (flash > 0) invalidate();
+    const party = partyOn();
+    // Party mode: the board blinks in time and runs through the colours.
+    m.emissiveIntensity = party ? 1 + 1.4 * (Math.sin(now / 120) > 0 ? 1 : 0.2) : 0.7 + 1.8 * flash;
+    if (party) m.emissive.setHSL(((now / 1000) * PARTY_HUE_SPEED + 0.5) % 1, 1, 0.6);
+    else m.emissive.set('#ffffff');
+    if (flash > 0 || party) invalidate();
   });
 
   return (
@@ -117,11 +132,29 @@ function CallBoard() {
   );
 }
 
-/** The hall's name in neon (assets-src/blender/build_sign.py), flickering on when the room loads. */
+const WHITE = new THREE.Color('#ffffff');
+const LIGHT_COLOR = new THREE.Color('#ff9a3c');
+
+/**
+ * The hall's name in neon (assets-src/blender/build_sign.py), flickering on
+ * when the room loads. Easter eggs: tapped five times running it shorts out
+ * (fizzes, goes dark, warms up again); in party mode it runs through the colours.
+ */
 function HallSign() {
   const { scene } = useGLTF(MODEL_URLS.hallSign, false, false);
   const invalidate = useThree((s) => s.invalidate);
   const born = useRef(performance.now());
+  const light = useRef<THREE.PointLight>(null);
+  /** Recent taps on the tube, and when it last shorted out. */
+  const taps = useRef<number[]>([]);
+  const shortedAt = useRef<number | null>(null);
+  const party = useEggs((s) => s.partyUntil);
+  // The party starts and ends with no frame due: wake the hall for both.
+  useEffect(() => {
+    invalidate();
+    const timer = setTimeout(invalidate, Math.max(0, party - performance.now()) + 50);
+    return () => clearTimeout(timer);
+  }, [party, invalidate]);
   const { sign, neon } = useMemo(() => {
     const sign = scene.clone(true);
     let neon: THREE.MeshStandardMaterial | null = null;
@@ -143,17 +176,61 @@ function HallSign() {
 
   useFrame(() => {
     if (!neon) return;
-    const t = performance.now() - born.current;
-    // A tube warming up: a few stutters, then steady.
-    const on = t > NEON_WARMUP_MS || NEON_STUTTER.filter((ms) => t > ms).length % 2 === 1;
-    neon.emissiveIntensity = on ? 3.2 : 0.15;
-    if (t <= NEON_WARMUP_MS) invalidate();
+    const now = performance.now();
+    let level: number;
+    const shorted = shortedAt.current === null ? Infinity : now - shortedAt.current;
+    if (shorted < SHORT_FIZZ_MS) {
+      // Arcing: on and off at random, a few times a frame's worth.
+      level = Math.random() > 0.45 ? 4.5 : 0.1;
+    } else if (shorted < SHORT_FIZZ_MS + SHORT_DARK_MS) {
+      level = 0.05;
+    } else {
+      if (shortedAt.current !== null) {
+        // Back from dark: it warms up from cold again.
+        born.current = shortedAt.current + SHORT_FIZZ_MS + SHORT_DARK_MS;
+        shortedAt.current = null;
+      }
+      const t = now - born.current;
+      // A tube warming up: a few stutters, then steady.
+      const on = t > NEON_WARMUP_MS || NEON_STUTTER.filter((ms) => t > ms).length % 2 === 1;
+      level = on ? 3.2 : 0.15;
+    }
+    const party = partyOn() && level > 1;
+    if (party) {
+      neon.emissive.setHSL(((now / 1000) * PARTY_HUE_SPEED) % 1, 1, 0.55);
+      neon.color.copy(neon.emissive).lerp(WHITE, 0.4);
+    } else {
+      neon.emissive.set('#ff9a2e');
+      neon.color.set('#ffc98a');
+    }
+    neon.emissiveIntensity = level;
+    if (light.current) {
+      light.current.intensity = 0.6 * Math.min(1, level / 3.2);
+      light.current.color.copy(party ? neon.emissive : LIGHT_COLOR);
+    }
+    if (now - born.current <= NEON_WARMUP_MS || shortedAt.current !== null || party) invalidate();
   });
 
+  // Easter egg: tap it a few times running and the tube shorts out.
+  const onTap = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    if (shortedAt.current !== null) return;
+    const now = performance.now();
+    const recent = taps.current.filter((at) => now - at < TAP_WINDOW_MS * SHORT_TAPS);
+    if (recent.length && now - recent[recent.length - 1]! > TAP_WINDOW_MS) recent.length = 0;
+    recent.push(now);
+    taps.current = recent;
+    if (recent.length < SHORT_TAPS) return;
+    taps.current = [];
+    shortedAt.current = now;
+    if (useBingoStore.getState().sound) playShort();
+    invalidate();
+  };
+
   return (
-    <group position={HALL_SIGN} scale={WALL_SIGN_SCALE}>
+    <group position={HALL_SIGN} scale={WALL_SIGN_SCALE} onClick={onTap}>
       <primitive object={sign} />
-      <pointLight position={[0, 0, 0.35]} color="#ff9a3c" intensity={0.6} distance={1.6} decay={2} />
+      <pointLight ref={light} position={[0, 0, 0.35]} color="#ff9a3c" intensity={0.6} distance={1.6} decay={2} />
     </group>
   );
 }

@@ -92,8 +92,10 @@ export function WinnerSign() {
   useEffect(() => {
     if (!result) return;
     let live = true;
+    // Easter egg: a draw with a single ball in the cage is no surprise, and the sign says so.
+    const alone = useBingoStore.getState().entries.length === 1;
     const paint = () => {
-      paintSign(canvas, result);
+      paintSign(canvas, alone ? { ...result, kicker: '¡QUÉ SORPRESA!' } : result);
       texture.needsUpdate = true;
       invalidate();
     };

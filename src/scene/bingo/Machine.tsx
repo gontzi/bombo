@@ -5,6 +5,7 @@ import { playClack, playImpacts, playRoll } from '../../audio/sounds';
 import { cageSpeed, extractionPhase, type DrawPlan, type ExtractionPhase } from '../../domain/draw';
 import { MAX_ENTRIES } from '../../domain/entries';
 import { crankDrive } from '../../state/crank';
+import { partyOn } from '../../state/eggs';
 import { useBingoStore } from '../../state/store';
 import { ChuteModel, CrankModel, FrameModel, WithFallback } from '../models';
 import { queueWarmup } from '../warmup';
@@ -25,6 +26,8 @@ const PICK_MS = 320;
 /** Turned by hand: the fastest the cage will go, and how quickly it coasts down once let go (per second). */
 const HAND_MAX = OMEGA_MAX * 1.3;
 const COAST = 0.7;
+/** How fast the cage turns by itself in party mode (state/eggs.ts). */
+const PARTY_SPIN = 4.5;
 /**
  * Drawn by hand: let go, the cage keeps turning at least this fast (a last flick of the crank) until
  * the timeline's `slowEnd`, then the operator's hand on the crank brings it to rest as the ball comes out.
@@ -237,6 +240,10 @@ export function Machine() {
         state.angle += turned;
         const hand = THREE.MathUtils.clamp(turned / dt, -HAND_MAX, HAND_MAX);
         state.spin += (hand - state.spin) * (1 - Math.exp(-dt * 18));
+      } else if (partyOn()) {
+        // Easter egg (the Konami code): the cage dances by itself while the party lasts.
+        state.spin += (PARTY_SPIN - state.spin) * (1 - Math.exp(-dt * 1.5));
+        state.angle += state.spin * dt;
       } else {
         state.spin *= Math.exp(-dt * COAST);
         if (Math.abs(state.spin) < 0.02) state.spin = 0;
@@ -260,6 +267,8 @@ export function Machine() {
     if (sound) playImpacts(impacts, Math.sqrt(LAYOUT.balls.maxRadius / r), CAGE_CENTER.x);
     if (cageRef.current) cageRef.current.rotation.x = state.angle;
     if (crankRef.current) crankRef.current.rotation.x = state.angle;
+    crankDrive.angle = state.angle;
+    crankDrive.spin = state.spin;
 
     // Instances: one per option, in list order (matching the atlas cells).
     const mesh = ballsRef.current;

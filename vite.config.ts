@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: {
-    // three.js alone is ~600 kB minified; it lives in its own lazily loaded chunk.
-    chunkSizeWarningLimit: 1200,
+    // three.js alone is ~600 kB minified; it lives with the hall (and its guide) in a lazily loaded chunk.
+    chunkSizeWarningLimit: 1300,
   },
   test: {
     environment: 'node',

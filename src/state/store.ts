@@ -113,7 +113,7 @@ const safeStorage: StateStorage = {
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object';
 
-function sanitizePersisted(raw: unknown): Partial<PersistedState> {
+export function sanitizePersisted(raw: unknown): Partial<PersistedState> {
   if (!isObject(raw)) return {};
   const out: Partial<PersistedState> = {};
   if (Array.isArray(raw.entries)) {

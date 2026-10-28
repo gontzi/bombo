@@ -13,11 +13,14 @@ export const TURNS_TO_DRAW = 2;
 export const useCrank = create<{
   active: boolean;
   progress: number;
+  /** Turned far too fast for far too long: the bearing smokes (scene/bingo/CrankSmoke.tsx). */
+  smoking: boolean;
   setActive: (on: boolean) => void;
   setProgress: (p: number) => void;
 }>((set) => ({
   active: false,
   progress: 0,
+  smoking: false,
   setActive: (on) => {
     if (!on) {
       crankDrive.dragging = false;
@@ -35,6 +38,10 @@ export const crankDrive = {
   turned: 0,
   /** Radians turned by hand (either way) since the crank was taken, towards a draw. */
   total: 0,
+  /** Where the crank (and the cage) stands, radians about +X: written by the machine every frame. */
+  angle: 0,
+  /** How fast the cage is turning, rad/s: written by the machine every frame. */
+  spin: 0,
   /** Takes what has been turned since the last call. */
   take(): number {
     const t = this.turned;

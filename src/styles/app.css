@@ -150,6 +150,11 @@ kbd {
   translate: -50% 0;
 }
 
+/* The guide covers the hall: its hints wait until it ends. */
+.controls[hidden] {
+  display: none !important;
+}
+
 /* ---------- Sound controls ---------- */
 
 .masthead {
@@ -337,6 +342,219 @@ kbd {
 .console__back:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* ---------- Guided tour: a spotlight on one part of the table, the demo's hand, and a docked card ---------- */
+
+.tour {
+  --spot-x: 50%;
+  --spot-y: 50%;
+  --spot-r: 0px;
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  overflow: hidden;
+  /* It plays by itself: the overlay takes every tap and drag, and gives nothing back. */
+  touch-action: none;
+  cursor: default;
+  user-select: none;
+  animation: tour-fade 600ms var(--ease-out);
+  transition: opacity 650ms var(--ease-out);
+}
+
+.tour.is-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tour__shade {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at var(--spot-x) var(--spot-y),
+    transparent var(--spot-r),
+    rgba(8, 4, 2, 0.55) calc(var(--spot-r) + 6px),
+    rgba(8, 4, 2, 0.74) calc(var(--spot-r) + 160px)
+  );
+  transition: opacity 700ms var(--ease-out);
+}
+
+/* During a draw the whole hall shows. */
+.tour[data-dim='off'] .tour__shade,
+.tour[data-dim='off'] .tour__ring {
+  opacity: 0;
+}
+
+.tour__ring {
+  position: absolute;
+  left: calc(var(--spot-x) - var(--spot-r));
+  top: calc(var(--spot-y) - var(--spot-r));
+  width: calc(var(--spot-r) * 2);
+  height: calc(var(--spot-r) * 2);
+  padding: 0;
+  border: 2px solid var(--brass-hi);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: tour-ring 2.4s var(--ease-out) infinite;
+  transition: opacity 500ms var(--ease-out);
+}
+
+.tour:not(.is-open) .tour__ring {
+  opacity: 0;
+}
+
+@keyframes tour-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 207, 122, 0.5), 0 0 22px rgba(255, 207, 122, 0.45);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 18px rgba(255, 207, 122, 0), 0 0 22px rgba(255, 207, 122, 0.45);
+  }
+}
+
+/* The fade to black the demo's balls are put away behind. */
+.tour__curtain {
+  position: absolute;
+  inset: 0;
+  background: var(--hall);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 450ms var(--ease-out);
+}
+
+.tour.is-dark .tour__curtain {
+  opacity: 1;
+}
+
+/* Docked at the left of the hall (the view slides right to make room: CameraRig), or along its bottom on narrow screens. */
+.tour__card {
+  position: absolute;
+  left: var(--gutter);
+  top: 50%;
+  translate: 0 -50%;
+  width: 340px;
+  box-sizing: content-box;
+  overflow: hidden;
+  pointer-events: none;
+  border: 1.5px solid var(--brass);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(38, 22, 12, 0.96), rgba(18, 10, 6, 0.96));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(232, 201, 124, 0.18);
+  animation: tour-card 520ms var(--ease-out);
+  transition:
+    height 360ms var(--ease-out),
+    opacity 300ms var(--ease-out),
+    transform 300ms var(--ease-out);
+}
+
+.tour:not(.is-open) .tour__card {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.tour__inner {
+  padding: 18px 20px 16px;
+}
+
+.tour__content {
+  animation: tour-content 420ms var(--ease-out);
+}
+
+@keyframes tour-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes tour-card {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes tour-content {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.tour__count {
+  margin: 0 0 4px;
+  font-family: var(--font-sign);
+  font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(232, 201, 124, 0.7);
+}
+
+.tour__title {
+  margin: 0 0 6px;
+  font-family: var(--font-sign);
+  font-weight: 800;
+  font-size: 1.55rem;
+  line-height: 1.1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--glow);
+}
+
+.tour__body {
+  margin: 0;
+  font-size: 0.95rem;
+  color: rgba(246, 233, 203, 0.9);
+}
+
+.tour__dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.tour__dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 1px solid var(--brass-lo);
+  border-radius: 999px;
+  background: none;
+  transition:
+    background-color 220ms,
+    border-color 220ms,
+    width 320ms var(--ease-out);
+}
+
+.tour__dot.is-done {
+  border-color: var(--brass);
+  background: var(--brass-lo);
+}
+
+.tour__dot.is-current {
+  width: 22px;
+  border-color: var(--brass);
+  background: var(--brass);
+}
+
+@media (max-width: 860px) {
+  .tour__card {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 12px;
+    translate: none;
+    width: auto;
+  }
+
+  .tour__inner {
+    padding: 14px 16px 12px;
+  }
+
+  .tour__title {
+    font-size: 1.3rem;
+  }
 }
 
 /* ---------- Mobile: the hall on top, the hint and the rack's actions under it ---------- */

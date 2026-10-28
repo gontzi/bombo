@@ -11,6 +11,8 @@ const LABEL_FONT = '"Fraunces Variable", "Iowan Old Style", Georgia, serif';
 export interface SignContent {
   ball: number;
   label: string;
+  /** Said over the label instead of the ball's number. */
+  kicker?: string;
 }
 
 /** Splits `text` into at most `maxLines` lines that fit `width`, or returns null. */
@@ -44,7 +46,7 @@ function truncate(ctx: CanvasRenderingContext2D, text: string, width: number): s
  * the bingo call in brass capitals and the winning option in cream serif,
  * as large as it fits on up to two lines.
  */
-export function paintSign(canvas: HTMLCanvasElement, { ball, label }: SignContent) {
+export function paintSign(canvas: HTMLCanvasElement, { ball, label, kicker }: SignContent) {
   canvas.width = WIDTH;
   canvas.height = HEIGHT;
   const ctx = canvas.getContext('2d')!;
@@ -95,7 +97,7 @@ export function paintSign(canvas: HTMLCanvasElement, { ball, label }: SignConten
   ctx.fillStyle = '#e8c97c';
   ctx.font = `600 60px ${BALL_FONT}`;
   ctx.letterSpacing = '10px';
-  ctx.fillText(`BOLA ${ballLetter(ball)}-${ball}`, left, 118);
+  ctx.fillText(kicker ?? `BOLA ${ballLetter(ball)}-${ball}`, left, 118);
   ctx.letterSpacing = '0px';
   ctx.fillRect(left, 140, width * 0.35, 4);
 

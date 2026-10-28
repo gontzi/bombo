@@ -3,6 +3,7 @@ import { useGLTF } from '@react-three/drei';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useSceneStatus } from '../state/sceneStatus';
+import { CrankSmoke } from './bingo/CrankSmoke';
 import { Machine } from './bingo/Machine';
 import { PushButton } from './bingo/PushButton';
 import { Sparkles } from './bingo/Sparkles';
@@ -14,6 +15,10 @@ import { Rack } from './rack/Rack';
 import { Room } from './room/Room';
 import { Table } from './room/Table';
 import { WinnerSign } from './sign/WinnerSign';
+import { Arm } from './tour/Arm';
+import { GuideCard } from './tour/GuideCard';
+import { TourDirector } from './tour/TourDirector';
+import { TourTracker } from './tour/TourTracker';
 import { Warmup } from './warmup';
 
 /** With demand rendering, a tab that loaded hidden may never draw its first frame. */
@@ -78,14 +83,20 @@ export default function BingoStage() {
       <Room />
       <Table />
       <Machine />
+      <CrankSmoke />
       <PushButton />
       <Rack />
+      <GuideCard />
+      <Arm />
       <Sparkles />
       <WithFallback>
         <WinnerSign />
       </WithFallback>
       {/* After Machine: its frame callback runs later, so it follows the ball where Machine just put it. */}
       <CameraRig />
+      {/* After CameraRig, so the guide's spotlight follows the camera as it is placed this frame. */}
+      <TourTracker />
+      <TourDirector />
       <PostEffects />
       <Warmup />
       <ReadyBoundary>

@@ -5,10 +5,12 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import type { DrawPlan } from '../domain/draw';
 import { useCrank } from '../state/crank';
 import { useRack } from '../state/rack';
+import { TOUR_STEPS, useTour } from '../state/tour';
 import { useBingoStore } from '../state/store';
 import { heroTracker } from './bingo/hero';
 import { CAGE_CENTER, LAYOUT, PORT_INSIDE, TRAY_CENTER } from './bingo/layout';
 import { RACK, RACK_FOCUS } from './rack/layout';
+import { TOUR_STOPS } from './tour/stops';
 import { cinematicEnd, cinematicShots, evaluateShots, landingShake, placeCamera, type Pose, type Shot } from './cinematic';
 
 /** Three-quarter view from the front right and above: table top, cage depth and the chute all read. */
@@ -44,6 +46,19 @@ const CRANK_DISTANCE = 0.5;
 const RACK_AZIMUTH = RACK.yaw + 0.12;
 const RACK_ELEVATION = 0.62;
 const RACK_DISTANCE = 0.36;
+/**
+ * While the guide is open on a wide screen its card is docked on the left
+ * (.tour__card in app.css: 340px wide, a 24px gutter each side), so the view
+ * slides right by half that, keeping what it shows in the middle of the rest.
+ */
+const TOUR_CARD_SPACE = 388;
+const WIDE = 860;
+
+/**
+ * After the hall sat still (demand rendering), the first frame's delta spans
+ * the whole wait: a move starting then must still start gently, as one frame.
+ */
+export const frameDelta = (delta: number) => (delta > 0.25 ? 1 / 60 : delta);
 
 /** Closest distance at which every corner of the machine's bounds fits on screen. */
 function fitDistance(fov: number, aspect: number, direction: THREE.Vector3, pitch = 0): number {
@@ -142,8 +157,20 @@ export function CameraRig() {
   /** The camera as last placed, so a draw can start from wherever it is. */
   const pose = useRef<Pose>({ target: FRAME_CENTER.clone(), azimuth: 0, elevation: 0, distance: 0, roll: 0, pitch: 0 });
   const cine = useRef<{ plan: DrawPlan | null; startedAt: number; shots: Shot[] }>({ plan: null, startedAt: 0, shots: [] });
+  /** How far the view is slid right for the guide's card, px. */
+  const shift = useRef(0);
 
   useFrame((_, delta) => {
+    const goalShift = useTour.getState().step !== null && width > WIDE ? TOUR_CARD_SPACE / 2 : 0;
+    shift.current += (goalShift - shift.current) * (reducedMotion ? 1 : 1 - Math.exp(-frameDelta(delta) * 3));
+    if (goalShift === 0 && shift.current < 0.5) {
+      shift.current = 0;
+      if (camera.view?.enabled) camera.clearViewOffset();
+    } else {
+      camera.setViewOffset(width, height, -shift.current, 0, width, height);
+      if (Math.abs(goalShift - shift.current) > 0.5) invalidate();
+    }
+
     const c = current.current;
     const { direction, distance, idleDistance } = base.current;
     const par = parallax.current;
@@ -178,22 +205,33 @@ export function CameraRig() {
       return;
     }
 
-    const focus = rackOpen ? 'rack' : cranking ? 'crank' : reducedMotion ? 'idle' : hasResult ? 'result' : drawing ? 'drawing' : 'idle';
+    // The guide flies to each part of the table in turn, even with reduced motion (it cuts instead).
+    const { step: tourStep, showResult: tourResult } = useTour.getState();
+    const tourView = tourStep === null ? null : tourResult ? 'result' : TOUR_STOPS[TOUR_STEPS[tourStep]!.id].view;
+    const close = typeof tourView === 'object' ? tourView : null;
+    const focus = close
+      ? 'tour'
+      : tourView ?? (rackOpen ? 'rack' : cranking ? 'crank' : reducedMotion ? 'idle' : hasResult ? 'result' : drawing ? 'drawing' : 'idle');
     const rest = angles(direction);
-    const goalDistance =
-      focus === 'crank'
+    const goalDistance = close
+      ? distance * close.distance
+      : focus === 'crank'
         ? distance * CRANK_DISTANCE
         : focus === 'rack'
           ? distance * RACK_DISTANCE
           : focus === 'result'
           ? distance * RESULT_DISTANCE
           : idleDistance * (focus === 'drawing' ? 0.94 : 1);
-    const goalTarget =
-      focus === 'crank' ? CRANK_TARGET : focus === 'rack' ? RACK_FOCUS : focus === 'result' ? RESULT_TARGET : FRAME_CENTER;
+    const goalTarget = close
+      ? close.target
+      : focus === 'crank' ? CRANK_TARGET : focus === 'rack' ? RACK_FOCUS : focus === 'result' ? RESULT_TARGET : FRAME_CENTER;
     const goalPitch = focus === 'idle' || focus === 'drawing' ? IDLE_PITCH : 0;
-    const goalAzimuth = focus === 'crank' ? CRANK_AZIMUTH : focus === 'rack' ? RACK_AZIMUTH : rest.azimuth;
-    const goalElevation = focus === 'crank' ? CRANK_ELEVATION : focus === 'rack' ? RACK_ELEVATION : rest.elevation;
-    const k = reducedMotion ? 1 : 1 - Math.exp(-delta * 2.2);
+    const goalAzimuth = close ? close.azimuth : focus === 'crank' ? CRANK_AZIMUTH : focus === 'rack' ? RACK_AZIMUTH : rest.azimuth;
+    const goalElevation = close
+      ? close.elevation
+      : focus === 'crank' ? CRANK_ELEVATION : focus === 'rack' ? RACK_ELEVATION : rest.elevation;
+    const dt = frameDelta(delta);
+    const k = reducedMotion ? 1 : 1 - Math.exp(-dt * 2.2);
     c.distance += (goalDistance - c.distance) * k;
     c.target.lerp(goalTarget, k);
     c.pitch += (goalPitch - c.pitch) * k;
@@ -201,11 +239,11 @@ export function CameraRig() {
     c.elevation += (goalElevation - c.elevation) * k;
 
     // The pointer is followed lazily (not while it is turning the crank), and fades back in after a draw's shot list.
-    const follow = reducedMotion || cranking || rackOpen ? 0 : 1;
-    const kp = 1 - Math.exp(-delta * 2.5);
+    const follow = reducedMotion || cranking || rackOpen || tourStep !== null ? 0 : 1;
+    const kp = 1 - Math.exp(-dt * 2.5);
     par.x += (pointer.x * follow - par.x) * kp;
     par.y += (pointer.y * follow - par.y) * kp;
-    par.weight += (1 - par.weight) * (1 - Math.exp(-delta * 1.2));
+    par.weight += (1 - par.weight) * (1 - Math.exp(-dt * 1.2));
 
     pose.current.target.copy(c.target);
     Object.assign(pose.current, {

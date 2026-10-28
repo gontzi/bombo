@@ -1,5 +1,6 @@
 import { useRack } from '../state/rack';
 import { useBingoStore } from '../state/store';
+import { startTour } from '../state/tour';
 import { IconMusicOff, IconMusicOn, IconSoundOff, IconSoundOn } from './icons';
 
 /** Sound controls over the hall. The hall's name is the neon sign on the back wall (scene/room/Room.tsx). */
@@ -15,6 +16,10 @@ export function Masthead() {
       {/* The rack on the table opens the options; this is the same for the keyboard and screen readers. */}
       <button type="button" className="visually-hidden-focusable masthead__options" onClick={() => useRack.getState().setOpen(true)}>
         Opciones del bombo
+      </button>
+      {/* Twin of the «¿Cómo se juega?» tent card on the table, which plays the guide again. */}
+      <button type="button" className="visually-hidden-focusable masthead__options" onClick={() => startTour()}>
+        Cómo funciona
       </button>
       <button
         type="button"

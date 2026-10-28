@@ -17,6 +17,7 @@ export function DrawButton() {
     (s) => !!s.lastResult && s.entries.some((e) => e.id === s.lastResult!.entryId),
   );
   const cranking = useCrank((s) => s.active);
+  const smoking = useCrank((s) => s.smoking);
   const turns = useCrank((s) => s.progress) * TURNS_TO_DRAW;
   const rackOpen = useRack((s) => s.open);
   const tipping = useRack((s) => s.tipping && !s.auto);
@@ -51,7 +52,9 @@ export function DrawButton() {
           )
         ) : cranking && !isDrawing ? (
           <>
-            {empty
+            {smoking
+              ? '¡Que echa humo! Más despacio, que se quema'
+              : empty
               ? 'Mete al menos una bola en el bombo'
               : turns >= TURNS_TO_DRAW
                 ? '¡Suelta la manivela y sale bola!'

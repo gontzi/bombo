@@ -10,6 +10,7 @@ Sorteos de bingo para cualquier decisión: escribe tus opciones en el portabolas
 - El bombo empieza vacío. Las opciones se meten en el portabolas de madera de la mesa (`assets-src/blender/build_rack.py`): al tocarlo la cámara se acerca, lo que escribes se graba en la placa de latón de delante y con Intro cae como bola en una cazoleta (tocándola se quita). «Ejemplo» lo llena con una lista de muestra.
 - Piezas de la máquina modeladas en Blender (`assets-src/blender/build_bingo.py`), con medidas compartidas en `src/scene/bingoLayout.json`.
 - La ganadora se anuncia en un cartel de marquesina colgante modelado en Blender (`assets-src/blender/build_sign.py`), que baja del techo con la bola cantada; al tocar la bola de la bandeja se quita del bombo.
+- La primera vez que alguien entra se reproduce sola una guía animada, sin que haya que tocar nada: la cámara recorre la mesa mientras un brazo en 3D (traje negro, puño de camisa blanco con gemelo y reloj de oro) escribe opciones en la placa, pulsa el botón verde y el rojo y gira la manivela, con un foco y una tarjeta que explican cada parte. Al terminar, las bolas de ejemplo se recogen tras un fundido. El cartelito «¿Cómo se juega?» de la mesa la repite.
 - Sonidos y música de fondo (un trío de jazz lento: piano eléctrico, contrabajo, escobillas y vibráfono) sintetizados con Web Audio, sin archivos; opciones e historial guardados en el navegador.
 
 ## Desarrollo
