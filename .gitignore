@@ -4,3 +4,8 @@ dist
 .DS_Store
 *.blend1
 .wrangler
+
+# local
+.env
+.env.*
+.mcp.json

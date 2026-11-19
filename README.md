@@ -13,6 +13,20 @@ Sorteos de bingo para cualquier decisión: escribe tus opciones en el portabolas
 - La primera vez que alguien entra se reproduce sola una guía animada, sin que haya que tocar nada: la cámara recorre la mesa mientras un brazo en 3D (traje negro, puño de camisa blanco con gemelo y reloj de oro) escribe opciones en la placa, pulsa el botón verde y el rojo y gira la manivela, con un foco y una tarjeta que explican cada parte. Al terminar, las bolas de ejemplo se recogen tras un fundido. El cartelito «¿Cómo se juega?» de la mesa la repite.
 - Sonidos y música de fondo (un trío de jazz lento: piano eléctrico, contrabajo, escobillas y vibráfono) sintetizados con Web Audio, sin archivos; opciones e historial guardados en el navegador.
 
+## Cómo funciona el sorteo
+
+Lo que ves es teatro, pero el resultado es honesto:
+
+1. Al pulsar el botón rojo (o soltar la manivela) se elige la ganadora **antes** de que se mueva nada: un número aleatorio de `crypto.getRandomValues` con muestreo por rechazo, para que todas las bolas tengan exactamente la misma probabilidad ([`src/domain/random.ts`](src/domain/random.ts)).
+2. Con la ganadora ya decidida se calcula un plan con los tiempos de la animación: arranque, mezcla, frenada, extracción, rampa y bandeja ([`src/domain/draw.ts`](src/domain/draw.ts)).
+3. La escena 3D solo representa ese plan. La física de las bolas es decorativa y no puede cambiar el resultado ([`src/scene/bingo/ballSim.ts`](src/scene/bingo/ballSim.ts)).
+
+La lógica del sorteo tiene tests propios (`npm test`).
+
+## Cómo está hecho
+
+La idea, el diseño y las decisiones son míos. Para escribir el código he usado [Claude Code](https://claude.com/claude-code) como copiloto, y por eso los commits llevan su coautoría. Los modelos 3D están generados con scripts de Blender que hay en `assets-src/blender/`.
+
 ## Desarrollo
 
 ```bash
@@ -48,3 +62,7 @@ El portabolas, igual con `build_rack.py` (`STEP='build'` guarda `bombo_rack.blen
 ```bash
 blender -b assets-src/blender/bombo_rack.blend --python-expr "STEP='export'; exec(open('assets-src/blender/build_rack.py').read())"
 ```
+
+## Licencia
+
+[MIT](LICENSE)

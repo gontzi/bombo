@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "blender": {
-      "command": "C:\\Users\\azldg\\.local\\bin\\uvx.exe",
-      "args": ["blender-mcp"]
-    }
-  }
-}
